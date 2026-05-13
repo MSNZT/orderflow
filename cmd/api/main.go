@@ -2,15 +2,23 @@ package main
 
 import (
 	"context"
+	"os"
 
 	"github.com/MSNZT/orderflow/internal/config"
 	"github.com/MSNZT/orderflow/internal/httpserver"
+	"github.com/MSNZT/orderflow/internal/router/middleware"
 )
 
 func main() {
-	config := config.MustLoad()
+	cfg := config.MustLoad()
 	ctx := context.Background()
-	server := httpserver.New(&config)
 
-	server.Run(ctx)
+	log := middleware.SetopLogger()
+	server := httpserver.New(&cfg, log)
+
+	if err := server.Run(ctx, log); err != nil {
+		log.Error("Application failed", "error", err)
+		os.Exit(1)
+	}
+
 }

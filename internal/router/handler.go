@@ -1,4 +1,4 @@
-package handler
+package router
 
 import (
 	"encoding/json"
@@ -21,9 +21,10 @@ const (
 	StatusError = "error"
 )
 
-func (h *Handler) HealthLive() http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		WriteJSON(w, http.StatusOK, OK())
+func (h *Handler) HealthLive(w http.ResponseWriter, r *http.Request) {
+	err := WriteJSON(w, http.StatusOK, OK())
+	if err != nil {
+		// позже залогирую, если потребуется
 	}
 }
 
