@@ -12,6 +12,7 @@ import (
 
 	"github.com/MSNZT/orderflow/internal/config"
 	"github.com/MSNZT/orderflow/internal/router"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type App struct {
@@ -20,8 +21,8 @@ type App struct {
 	logger *slog.Logger
 }
 
-func New(config *config.Config, log *slog.Logger) *App {
-	router := router.NewRouter()
+func New(config *config.Config, dbPool *pgxpool.Pool, log *slog.Logger) *App {
+	router := router.NewRouter(dbPool, log)
 
 	return &App{
 		server: &http.Server{

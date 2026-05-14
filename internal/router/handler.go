@@ -2,17 +2,23 @@ package router
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-type Handler struct{}
+type Handler struct {
+	dbPool *pgxpool.Pool
+	log    *slog.Logger
+}
 
 type HealthResponse struct {
 	Status string `json:"status"`
 }
 
-func NewHandler() *Handler {
-	return &Handler{}
+func NewHandler(dbPool *pgxpool.Pool, log *slog.Logger) *Handler {
+	return &Handler{dbPool: dbPool, log: log}
 }
 
 const (
@@ -20,6 +26,20 @@ const (
 )
 
 func (h *Handler) HealthLive(w http.ResponseWriter, r *http.Request) {
+	_ = WriteJSON(w, http.StatusOK, HealthResponse{
+		Status: StatusOK,
+	})
+}
+
+func (h *Handler) HealthReady(w http.ResponseWriter, r *http.Request) {
+	if err := h.dbPool.Ping(r.Context()); err != nil {
+		h.log.Error("failed to ping postgres", slog.String("error", err.Error()))
+		_ = WriteJSON(w, http.StatusServiceUnavailable, HealthResponse{
+			Status: "error",
+		})
+		return
+	}
+
 	_ = WriteJSON(w, http.StatusOK, HealthResponse{
 		Status: StatusOK,
 	})
