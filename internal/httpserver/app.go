@@ -25,11 +25,12 @@ func New(config *config.Config, log *slog.Logger) *App {
 
 	return &App{
 		server: &http.Server{
-			Addr:         config.HTTPServer.Addr,
-			Handler:      router,
-			ReadTimeout:  config.HTTPServer.Timeout,
-			WriteTimeout: config.HTTPServer.Timeout,
-			IdleTimeout:  config.HTTPServer.IdleTimeout,
+			Addr:              config.HTTPServer.Addr,
+			Handler:           router,
+			ReadTimeout:       config.HTTPServer.ReadTimeout,
+			ReadHeaderTimeout: config.HTTPServer.ReadHeaderTimeout,
+			WriteTimeout:      config.HTTPServer.WriteTimeout,
+			IdleTimeout:       config.HTTPServer.IdleTimeout,
 		},
 		config: config,
 		logger: log,
@@ -55,17 +56,21 @@ func (a *App) Run(ctx context.Context) error {
 		a.logger.Info("shutdown started", slog.String("reason", "context canceled"))
 	case err := <-serverErrors:
 		a.logger.Error("server error", slog.String("error", err.Error()))
-		return fmt.Errorf("server error: %w", err)
 	case <-stop:
 		a.logger.Info("shutdown started")
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, a.config.HTTPServer.ShutdownTimeout)
+	shutDown, cancel := context.WithTimeout(context.Background(), a.config.HTTPServer.ShutdownTimeout)
 	defer cancel()
 
-	if err := a.server.Shutdown(ctx); err != nil {
-		a.logger.Error("shutdown failed", slog.String("error", err.Error()))
-		return fmt.Errorf("shutdown failed: %w", err)
+	if err := a.server.Shutdown(shutDown); err != nil {
+		a.logger.Error("http server shutdown failed", slog.String("error", err.Error()))
+
+		if err := a.server.Close(); err != nil {
+			return fmt.Errorf("server close: %w", err)
+		}
+
+		return fmt.Errorf("server shutdown: %w", err)
 	}
 
 	a.logger.Info("shutdown completed")

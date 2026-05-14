@@ -16,6 +16,7 @@ func main() {
 	cfg, err := config.Load()
 	if err != nil {
 		log.Error("cannot initialize config file", slog.String("error", err.Error()))
+		os.Exit(1)
 	}
 	ctx := context.Background()
 
