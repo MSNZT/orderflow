@@ -56,14 +56,15 @@ func (a *App) Run(ctx context.Context) error {
 		a.logger.Info("shutdown started", slog.String("reason", "context canceled"))
 	case err := <-serverErrors:
 		a.logger.Error("server error", slog.String("error", err.Error()))
-	case <-stop:
-		a.logger.Info("shutdown started")
+		return fmt.Errorf("server error: %w", err)
+	case sig := <-stop:
+		a.logger.Info("shutdown started", slog.String("signal", sig.String()))
 	}
 
-	shutDown, cancel := context.WithTimeout(context.Background(), a.config.HTTPServer.ShutdownTimeout)
+	shutDownCtx, cancel := context.WithTimeout(context.Background(), a.config.HTTPServer.ShutdownTimeout)
 	defer cancel()
 
-	if err := a.server.Shutdown(shutDown); err != nil {
+	if err := a.server.Shutdown(shutDownCtx); err != nil {
 		a.logger.Error("http server shutdown failed", slog.String("error", err.Error()))
 
 		if err := a.server.Close(); err != nil {
