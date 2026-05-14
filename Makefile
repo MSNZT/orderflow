@@ -1,4 +1,13 @@
-CONFIG_PATH=./config/config.yaml
+.PHONY: run test fmt tidy
 
 run:
-	CONFIG_PATH=${CONFIG_PATH} go run ./cmd/api/main.go
+	go run ./cmd/api
+
+test:
+	go test ./...
+
+fmt:
+	go fmt ./...
+
+tidy:
+	go mod tidy

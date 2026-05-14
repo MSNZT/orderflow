@@ -1,39 +1,82 @@
 package config
 
 import (
-	"log"
+	"fmt"
 	"os"
 	"time"
-
-	"github.com/ilyakaznacheev/cleanenv"
 )
 
 type Config struct {
-	HTTPServer `yaml:"http_server"`
+	HTTPServer HTTPServerConfig
 }
 
-type HTTPServer struct {
-	Addr            string        `yaml:"addr" env-default:"localhost:8080"`
-	Timeout         time.Duration `yaml:"timeout" env-default:"4s"`
-	IdleTimeout     time.Duration `yaml:"idle_timeout" env-default:"60s"`
-	ShutdownTimeout time.Duration `yaml:"shutdown_timeout" env-default:"30s"`
+type HTTPServerConfig struct {
+	Addr              string
+	ReadTimeout       time.Duration
+	ReadHeaderTimeout time.Duration
+	WriteTimeout      time.Duration
+	IdleTimeout       time.Duration
+	ShutdownTimeout   time.Duration
 }
 
-func MustLoad() Config {
-	CONFIG_PATH := os.Getenv("CONFIG_PATH")
-	if CONFIG_PATH == "" {
-		log.Fatal("CONFIG_PATH is not set")
+func Load() (Config, error) {
+	addr := getEnv("HTTP_ADDR", ":8080")
+
+	readTimeout, err := getDurationEnv("HTTP_READ_TIMEOUT", 10*time.Second)
+	if err != nil {
+		return Config{}, err
 	}
 
-	if _, err := os.Stat(CONFIG_PATH); err != nil {
-		log.Fatalf("Config file doesn't exists %s", CONFIG_PATH)
+	readHeaderTimeout, err := getDurationEnv("HTTP_READ_HEADER_TIMEOUT", 5*time.Second)
+	if err != nil {
+		return Config{}, err
 	}
 
-	var config Config
-
-	if err := cleanenv.ReadConfig(CONFIG_PATH, &config); err != nil {
-		log.Fatalf("Cannot read config file: %s", err)
+	writeTimeout, err := getDurationEnv("HTTP_WRITE_TIMEOUT", 10*time.Second)
+	if err != nil {
+		return Config{}, err
 	}
 
-	return config
+	idleTimeout, err := getDurationEnv("HTTP_IDLE_TIMEOUT", 60*time.Second)
+	if err != nil {
+		return Config{}, err
+	}
+
+	shutdownTimeout, err := getDurationEnv("HTTP_SHUTDOWN_TIMEOUT", 30*time.Second)
+	if err != nil {
+		return Config{}, err
+	}
+
+	return Config{
+		HTTPServer: HTTPServerConfig{
+			Addr:              addr,
+			ReadTimeout:       readTimeout,
+			ReadHeaderTimeout: readHeaderTimeout,
+			WriteTimeout:      writeTimeout,
+			IdleTimeout:       idleTimeout,
+			ShutdownTimeout:   shutdownTimeout,
+		},
+	}, nil
+}
+
+func getEnv(env string, defaultValue string) string {
+	v := os.Getenv(env)
+	if v == "" {
+		return defaultValue
+	}
+	return v
+}
+
+func getDurationEnv(key string, duration time.Duration) (time.Duration, error) {
+	v := os.Getenv(key)
+	if v == "" {
+		return duration, nil
+	}
+
+	d, err := time.ParseDuration(v)
+	if err != nil {
+		return 0, fmt.Errorf("invalid duration env %s: %w", key, err)
+	}
+
+	return d, nil
 }

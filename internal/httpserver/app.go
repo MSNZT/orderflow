@@ -2,8 +2,9 @@ package httpserver
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -16,44 +17,63 @@ import (
 type App struct {
 	server *http.Server
 	config *config.Config
+	logger *slog.Logger
 }
 
-func New(config *config.Config) *App {
+func New(config *config.Config, log *slog.Logger) *App {
 	router := router.NewRouter()
 
 	return &App{
 		server: &http.Server{
-			Addr:         config.Addr,
-			Handler:      router,
-			ReadTimeout:  config.Timeout,
-			WriteTimeout: config.Timeout,
-			IdleTimeout:  config.IdleTimeout,
+			Addr:              config.HTTPServer.Addr,
+			Handler:           router,
+			ReadTimeout:       config.HTTPServer.ReadTimeout,
+			ReadHeaderTimeout: config.HTTPServer.ReadHeaderTimeout,
+			WriteTimeout:      config.HTTPServer.WriteTimeout,
+			IdleTimeout:       config.HTTPServer.IdleTimeout,
 		},
 		config: config,
+		logger: log,
 	}
 }
 
-func (a *App) Run(ctx context.Context) {
+func (a *App) Run(ctx context.Context) error {
 	stop := make(chan os.Signal, 1)
+	serverErrors := make(chan error, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+	defer signal.Stop(stop)
 
 	go func() {
-		fmt.Printf("Starting server on %s\n", a.server.Addr)
+		a.logger.Info("http server started", slog.String("addr", a.server.Addr))
 
-		if err := a.server.ListenAndServe(); err != nil {
-			log.Fatalf("Server error: %v", err)
+		if err := a.server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			serverErrors <- err
 		}
 	}()
 
-	<-stop
-
-	fmt.Println("Получен сигнал завершения. Остановка сервера...")
-	ctx, cancel := context.WithTimeout(ctx, a.config.ShutdownTimeout)
-	defer cancel()
-
-	if err := a.server.Shutdown(ctx); err != nil {
-		log.Fatalf("Произошла ошибка при остановке сервера")
+	select {
+	case <-ctx.Done():
+		a.logger.Info("shutdown started", slog.String("reason", "context canceled"))
+	case err := <-serverErrors:
+		a.logger.Error("server error", slog.String("error", err.Error()))
+		return fmt.Errorf("server error: %w", err)
+	case sig := <-stop:
+		a.logger.Info("shutdown started", slog.String("signal", sig.String()))
 	}
 
-	fmt.Println("Сервер успешно остановлен")
+	shutDownCtx, cancel := context.WithTimeout(context.Background(), a.config.HTTPServer.ShutdownTimeout)
+	defer cancel()
+
+	if err := a.server.Shutdown(shutDownCtx); err != nil {
+		a.logger.Error("http server shutdown failed", slog.String("error", err.Error()))
+
+		if err := a.server.Close(); err != nil {
+			return fmt.Errorf("server close: %w", err)
+		}
+
+		return fmt.Errorf("server shutdown: %w", err)
+	}
+
+	a.logger.Info("shutdown completed")
+	return nil
 }
