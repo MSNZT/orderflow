@@ -62,10 +62,10 @@ func (a *App) Run(ctx context.Context) error {
 		a.logger.Info("shutdown started", slog.String("signal", sig.String()))
 	}
 
-	shutDownCtx, cancel := context.WithTimeout(context.Background(), a.config.HTTPServer.ShutdownTimeout)
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), a.config.HTTPServer.ShutdownTimeout)
 	defer cancel()
 
-	if err := a.server.Shutdown(shutDownCtx); err != nil {
+	if err := a.server.Shutdown(shutdownCtx); err != nil {
 		a.logger.Error("http server shutdown failed", slog.String("error", err.Error()))
 
 		if err := a.server.Close(); err != nil {

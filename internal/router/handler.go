@@ -33,7 +33,7 @@ func (h *Handler) HealthLive(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) HealthReady(w http.ResponseWriter, r *http.Request) {
 	if err := h.dbPool.Ping(r.Context()); err != nil {
-		h.log.Error("failed to ping postgres", slog.String("error", err.Error()))
+		h.log.Warn("postgres readiness check failed", slog.String("error", err.Error()))
 		_ = WriteJSON(w, http.StatusServiceUnavailable, HealthResponse{
 			Status: "error",
 		})

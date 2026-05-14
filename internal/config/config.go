@@ -9,7 +9,7 @@ import (
 
 type Config struct {
 	HTTPServer HTTPServerConfig
-	DB         DBConfig
+	Postgres   PostgresConfig
 }
 
 type HTTPServerConfig struct {
@@ -21,11 +21,11 @@ type HTTPServerConfig struct {
 	ShutdownTimeout   time.Duration
 }
 
-type DBConfig struct {
+type PostgresConfig struct {
 	DSN             string
-	MaxOpenConns    int32
-	MaxIddleConns   int32
-	ConnMaxLifetime time.Duration
+	MaxConns        int32
+	MinConns        int32
+	MaxConnLifetime time.Duration
 }
 
 func Load() (Config, error) {
@@ -58,19 +58,27 @@ func Load() (Config, error) {
 
 	dsn := getEnv("POSTGRES_DSN", "postgres://orderflow:orderflow@localhost:5432/orderflow?sslmode=disable")
 
-	connMaxLifetime, err := getDurationEnv("POSTGRES_CONN_MAX_LIFETIME", 30*time.Minute)
+	maxConnLifetime, err := getDurationEnv("POSTGRES_CONN_MAX_LIFETIME", 30*time.Minute)
 	if err != nil {
 		return Config{}, err
 	}
 
-	maxOpenConns, err := getIntEnv("POSTGRES_MAX_OPEN_CONNS", 10)
+	maxConns, err := getIntEnv("POSTGRES_MAX_CONNS", 10)
 	if err != nil {
 		return Config{}, err
 	}
 
-	maxIddleConns, err := getIntEnv("POSTGRES_MAX_IDLE_CONNS", 5)
+	if maxConns < 0 {
+		return Config{}, fmt.Errorf("max conns must be greater than 0: %v", maxConns)
+	}
+
+	minConns, err := getIntEnv("POSTGRES_MIN_CONNS", 0)
 	if err != nil {
 		return Config{}, err
+	}
+
+	if minConns <= 0 || minConns <= maxConns {
+		return Config{}, fmt.Errorf("max conns must be less than or equal maxConns: %v", maxConns)
 	}
 
 	return Config{
@@ -82,11 +90,11 @@ func Load() (Config, error) {
 			IdleTimeout:       idleTimeout,
 			ShutdownTimeout:   shutdownTimeout,
 		},
-		DB: DBConfig{
+		Postgres: PostgresConfig{
 			DSN:             dsn,
-			ConnMaxLifetime: connMaxLifetime,
-			MaxOpenConns:    int32(maxOpenConns),
-			MaxIddleConns:   int32(maxIddleConns),
+			MaxConnLifetime: maxConnLifetime,
+			MaxConns:        int32(maxConns),
+			MinConns:        int32(minConns),
 		},
 	}, nil
 }
@@ -121,7 +129,7 @@ func getIntEnv(key string, n int) (int, error) {
 
 	n, err := strconv.Atoi(v)
 	if err != nil {
-		return 0, fmt.Errorf("invalid convert to int: %w", err)
+		return 0, fmt.Errorf("invalid int env %s=%q: %w", key, v, err)
 	}
 
 	return n, nil
