@@ -6,17 +6,17 @@ import (
 
 	"github.com/MSNZT/orderflow/internal/config"
 	"github.com/MSNZT/orderflow/internal/httpserver"
-	"github.com/MSNZT/orderflow/internal/router/middleware"
+	"github.com/MSNZT/orderflow/internal/logger"
 )
 
 func main() {
-	cfg := config.MustLoad()
+	cfg := config.Load()
 	ctx := context.Background()
 
-	log := middleware.SetopLogger()
+	log := logger.New()
 	server := httpserver.New(&cfg, log)
 
-	if err := server.Run(ctx, log); err != nil {
+	if err := server.Run(ctx); err != nil {
 		log.Error("Application failed", "error", err)
 		os.Exit(1)
 	}

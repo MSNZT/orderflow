@@ -17,6 +17,7 @@ import (
 type App struct {
 	server *http.Server
 	config *config.Config
+	logger *slog.Logger
 }
 
 func New(config *config.Config, log *slog.Logger) *App {
@@ -31,16 +32,17 @@ func New(config *config.Config, log *slog.Logger) *App {
 			IdleTimeout:  config.HTTPServer.IdleTimeout,
 		},
 		config: config,
+		logger: log,
 	}
 }
 
-func (a *App) Run(ctx context.Context, log *slog.Logger) error {
+func (a *App) Run(ctx context.Context) error {
 	stop := make(chan os.Signal, 1)
 	serverErrors := make(chan error, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 
 	go func() {
-		log.Info("Starting server on", "addr", a.server.Addr)
+		a.logger.Info("http server started", slog.String("addr", a.server.Addr))
 
 		if err := a.server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			serverErrors <- err
@@ -49,20 +51,20 @@ func (a *App) Run(ctx context.Context, log *slog.Logger) error {
 
 	select {
 	case err := <-serverErrors:
-		log.Error("Server error", "error", err)
-		return fmt.Errorf("Server error: %w", err)
+		a.logger.Error("server error", slog.String("error", err.Error()))
+		return fmt.Errorf("server error: %w", err)
 	case <-stop:
-		log.Info("Termination signal received. Stopping server...")
+		a.logger.Info("Termination signal received. Stopping server...")
 	}
 
 	ctx, cancel := context.WithTimeout(ctx, a.config.HTTPServer.ShutdownTimeout)
 	defer cancel()
 
 	if err := a.server.Shutdown(ctx); err != nil {
-		log.Error("server shutdown failed:", "err", err)
-		return fmt.Errorf("server shutdown failed: %w", err)
+		a.logger.Error("http server shutdown failed:", slog.String("err", err.Error()))
+		return fmt.Errorf("http server shutdown failed: %w", err)
 	}
 
-	log.Info("Server successfully stopped")
+	a.logger.Info("Server successfully stopped")
 	return nil
 }

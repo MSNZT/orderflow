@@ -1,11 +1,11 @@
-package middleware
+package logger
 
 import (
 	"log/slog"
 	"os"
 )
 
-func SetopLogger() *slog.Logger {
+func New() *slog.Logger {
 	log := slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{
 		Level: slog.LevelDebug,
 	}))

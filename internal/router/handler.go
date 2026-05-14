@@ -12,6 +12,10 @@ type Response struct {
 	Error  string `json:"error,omitempty"`
 }
 
+type HealthResponse struct {
+	Status string `json:"status"`
+}
+
 func NewHandler() *Handler {
 	return &Handler{}
 }
@@ -22,20 +26,13 @@ const (
 )
 
 func (h *Handler) HealthLive(w http.ResponseWriter, r *http.Request) {
-	err := WriteJSON(w, http.StatusOK, OK())
-	if err != nil {
-		// позже залогирую, если потребуется
-	}
+	_ = WriteJSON(w, http.StatusOK, HealthResponse{
+		Status: StatusOK,
+	})
 }
 
 func WriteJSON(w http.ResponseWriter, statusCode int, v any) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
 	return json.NewEncoder(w).Encode(v)
-}
-
-func OK() Response {
-	return Response{
-		Status: StatusOK,
-	}
 }

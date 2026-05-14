@@ -1,5 +1,0 @@
-http_server:
-  addr: ":8080"
-  timeout: 4s
-  idle_timeout: 60s
-  shutdown_timeout: 30s
