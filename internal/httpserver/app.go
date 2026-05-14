@@ -40,6 +40,7 @@ func (a *App) Run(ctx context.Context) error {
 	stop := make(chan os.Signal, 1)
 	serverErrors := make(chan error, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+	defer signal.Stop(stop)
 
 	go func() {
 		a.logger.Info("http server started", slog.String("addr", a.server.Addr))
@@ -50,21 +51,23 @@ func (a *App) Run(ctx context.Context) error {
 	}()
 
 	select {
+	case <-ctx.Done():
+		a.logger.Info("shutdown started", slog.String("reason", "context canceled"))
 	case err := <-serverErrors:
 		a.logger.Error("server error", slog.String("error", err.Error()))
 		return fmt.Errorf("server error: %w", err)
 	case <-stop:
-		a.logger.Info("Termination signal received. Stopping server...")
+		a.logger.Info("shutdown started")
 	}
 
 	ctx, cancel := context.WithTimeout(ctx, a.config.HTTPServer.ShutdownTimeout)
 	defer cancel()
 
 	if err := a.server.Shutdown(ctx); err != nil {
-		a.logger.Error("http server shutdown failed:", slog.String("err", err.Error()))
-		return fmt.Errorf("http server shutdown failed: %w", err)
+		a.logger.Error("shutdown failed", slog.String("error", err.Error()))
+		return fmt.Errorf("shutdown failed: %w", err)
 	}
 
-	a.logger.Info("Server successfully stopped")
+	a.logger.Info("shutdown completed")
 	return nil
 }

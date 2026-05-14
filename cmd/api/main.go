@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"log/slog"
 	"os"
 
 	"github.com/MSNZT/orderflow/internal/config"
@@ -10,14 +11,18 @@ import (
 )
 
 func main() {
-	cfg := config.Load()
+	log := logger.New()
+
+	cfg, err := config.Load()
+	if err != nil {
+		log.Error("cannot initialize config file", slog.String("error", err.Error()))
+	}
 	ctx := context.Background()
 
-	log := logger.New()
 	server := httpserver.New(&cfg, log)
 
 	if err := server.Run(ctx); err != nil {
-		log.Error("Application failed", "error", err)
+		log.Error("application failed", slog.String("error", err.Error()))
 		os.Exit(1)
 	}
 

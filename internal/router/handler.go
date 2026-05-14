@@ -7,11 +7,6 @@ import (
 
 type Handler struct{}
 
-type Response struct {
-	Status string `json:"status"`
-	Error  string `json:"error,omitempty"`
-}
-
 type HealthResponse struct {
 	Status string `json:"status"`
 }
@@ -21,8 +16,7 @@ func NewHandler() *Handler {
 }
 
 const (
-	StatusOK    = "ok"
-	StatusError = "error"
+	StatusOK = "ok"
 )
 
 func (h *Handler) HealthLive(w http.ResponseWriter, r *http.Request) {
