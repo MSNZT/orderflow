@@ -1,8 +1,7 @@
 CONFIG_PATH ?= ./config/local.yaml
 
 .PHONY: run build test fmt tidy
-.PHONY: postgres-up postgres-down psql
-.PHONY: compose-up compose-down compose-ps
+.PHONY: start-app stop-app
 .PHONY: logs-api logs-postgres
 .PHONY: health-live health-ready
 
@@ -21,23 +20,11 @@ fmt:
 tidy:
 	go mod tidy
 
-postgres-up:
-	docker compose up -d postgres
-
-postgres-down:
-	docker compose stop postgres
-
-psql:
-	docker compose exec postgres psql -U orderflow -d orderflow
-
-compose-up:
+start-app:
 	docker compose up --build -d
 
-compose-down:
+stop-app:
 	docker compose down
-
-compose-ps:
-	docker compose ps
 
 logs-api:
 	docker compose logs -f api

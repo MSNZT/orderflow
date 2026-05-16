@@ -41,7 +41,7 @@ func NewPool(ctx context.Context, config *config.PostgresConfig) (*pgxpool.Pool,
 		select {
 		case <-ctx.Done():
 			pool.Close()
-			return nil, fmt.Errorf("postgres ping canceleld: %w", ctx.Err())
+			return nil, fmt.Errorf("postgres ping canceled: %w", ctx.Err())
 		case <-time.After(delay):
 		}
 
