@@ -4,79 +4,98 @@ import (
 	"fmt"
 	"os"
 	"time"
+
+	"github.com/ilyakaznacheev/cleanenv"
 )
 
 type Config struct {
-	HTTPServer HTTPServerConfig
+	HTTP     HTTPConfig     `yaml:"http"`
+	Postgres PostgresConfig `yaml:"postgres"`
 }
 
-type HTTPServerConfig struct {
-	Addr              string
-	ReadTimeout       time.Duration
-	ReadHeaderTimeout time.Duration
-	WriteTimeout      time.Duration
-	IdleTimeout       time.Duration
-	ShutdownTimeout   time.Duration
+type HTTPConfig struct {
+	Addr              string        `yaml:"addr" env:"HTTP_ADDR"`
+	ReadTimeout       time.Duration `yaml:"read_timeout" env:"HTTP_READ_TIMEOUT"`
+	ReadHeaderTimeout time.Duration `yaml:"read_header_timeout" env:"HTTP_READ_HEADER_TIMEOUT"`
+	WriteTimeout      time.Duration `yaml:"write_timeout" env:"HTTP_WRITE_TIMEOUT"`
+	IdleTimeout       time.Duration `yaml:"idle_timeout" env:"HTTP_IDLE_TIMEOUT"`
+	ShutdownTimeout   time.Duration `yaml:"shutdown_timeout" env:"HTTP_SHUTDOWN_TIMEOUT"`
 }
 
-func Load() (Config, error) {
-	addr := getEnv("HTTP_ADDR", ":8080")
-
-	readTimeout, err := getDurationEnv("HTTP_READ_TIMEOUT", 10*time.Second)
-	if err != nil {
-		return Config{}, err
-	}
-
-	readHeaderTimeout, err := getDurationEnv("HTTP_READ_HEADER_TIMEOUT", 5*time.Second)
-	if err != nil {
-		return Config{}, err
-	}
-
-	writeTimeout, err := getDurationEnv("HTTP_WRITE_TIMEOUT", 10*time.Second)
-	if err != nil {
-		return Config{}, err
-	}
-
-	idleTimeout, err := getDurationEnv("HTTP_IDLE_TIMEOUT", 60*time.Second)
-	if err != nil {
-		return Config{}, err
-	}
-
-	shutdownTimeout, err := getDurationEnv("HTTP_SHUTDOWN_TIMEOUT", 30*time.Second)
-	if err != nil {
-		return Config{}, err
-	}
-
-	return Config{
-		HTTPServer: HTTPServerConfig{
-			Addr:              addr,
-			ReadTimeout:       readTimeout,
-			ReadHeaderTimeout: readHeaderTimeout,
-			WriteTimeout:      writeTimeout,
-			IdleTimeout:       idleTimeout,
-			ShutdownTimeout:   shutdownTimeout,
-		},
-	}, nil
+type PostgresConfig struct {
+	DSN             string        `yaml:"dsn" env:"POSTGRES_DSN"`
+	MaxConns        int32         `yaml:"max_conns" env:"POSTGRES_MAX_CONNS"`
+	MinConns        int32         `yaml:"min_conns" env:"POSTGRES_MIN_CONNS"`
+	MaxConnLifetime time.Duration `yaml:"max_conn_lifetime" env:"POSTGRES_MAX_CONN_LIFETIME"`
 }
 
-func getEnv(env string, defaultValue string) string {
-	v := os.Getenv(env)
-	if v == "" {
-		return defaultValue
+func Load() (*Config, error) {
+	CONFIG_PATH := os.Getenv("CONFIG_PATH")
+	if CONFIG_PATH == "" {
+		return nil, fmt.Errorf("CONFIG_PATH is not set")
 	}
-	return v
+
+	if _, err := os.Stat(CONFIG_PATH); err != nil {
+		return nil, fmt.Errorf("config file doesn't exist: %v", CONFIG_PATH)
+	}
+
+	var cfg Config
+
+	if err := cleanenv.ReadConfig(CONFIG_PATH, &cfg); err != nil {
+		return nil, fmt.Errorf("failed to parse config file: %w", err)
+	}
+
+	if err := cfg.validate(); err != nil {
+		return nil, fmt.Errorf("invalid config: %w", err)
+	}
+
+	return &cfg, nil
 }
 
-func getDurationEnv(key string, duration time.Duration) (time.Duration, error) {
-	v := os.Getenv(key)
-	if v == "" {
-		return duration, nil
+func (c *Config) validate() error {
+	if c.HTTP.Addr == "" {
+		return fmt.Errorf("http addr is required")
 	}
 
-	d, err := time.ParseDuration(v)
-	if err != nil {
-		return 0, fmt.Errorf("invalid duration env %s: %w", key, err)
+	if c.HTTP.ReadTimeout <= 0 {
+		return fmt.Errorf("http read timeout must be greater than 0")
 	}
 
-	return d, nil
+	if c.HTTP.ReadHeaderTimeout <= 0 {
+		return fmt.Errorf("http read header timeout must be greater than 0 seconds")
+	}
+
+	if c.HTTP.ShutdownTimeout <= 0*time.Second {
+		return fmt.Errorf("http shutdown timeout must be greater than 0 seconds")
+	}
+
+	if c.HTTP.IdleTimeout <= 0*time.Second {
+		return fmt.Errorf("http idle timeout must be greater than 0 seconds")
+	}
+
+	if c.HTTP.WriteTimeout <= 0*time.Second {
+		return fmt.Errorf("http write timeout must be greater than 0 seconds")
+	}
+
+	if c.Postgres.DSN == "" {
+		return fmt.Errorf("postgres dsn is required")
+	}
+
+	if c.Postgres.MaxConns <= 0 {
+		return fmt.Errorf("postgres max conns must be greater than 0")
+	}
+
+	if c.Postgres.MinConns < 0 {
+		return fmt.Errorf("postgres min conns must be greater than or equal to 0")
+	}
+
+	if c.Postgres.MaxConnLifetime < 0 {
+		return fmt.Errorf("postgres max conn lifetime must be greater than or equal to 0")
+	}
+
+	if c.Postgres.MinConns > c.Postgres.MaxConns {
+		return fmt.Errorf("postgres min conns cannot be greater than max conns")
+	}
+
+	return nil
 }
