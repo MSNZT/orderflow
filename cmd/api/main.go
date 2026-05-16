@@ -26,7 +26,7 @@ func main() {
 
 	dbPool, err := postgres.NewPool(ctx, &cfg.Postgres)
 	if err != nil {
-		log.Error("failed to connect postgres", slog.String("error", err.Error()))
+		log.Error("failed to connect to postgres", slog.String("error", err.Error()))
 		os.Exit(1)
 	}
 	defer dbPool.Close()

@@ -28,16 +28,20 @@ func NewPool(ctx context.Context, config *config.PostgresConfig) (*pgxpool.Pool,
 	delay := 1 * time.Second
 
 	var pingErr error
-	for i := 0; i < maxAttempts; i++ {
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
 		pingErr = pool.Ping(ctx)
 		if pingErr == nil {
 			return pool, nil
 		}
 
+		if attempt == maxAttempts {
+			break
+		}
+
 		select {
 		case <-ctx.Done():
 			pool.Close()
-			return nil, ctx.Err()
+			return nil, fmt.Errorf("postgres ping canceleld: %w", ctx.Err())
 		case <-time.After(delay):
 		}
 

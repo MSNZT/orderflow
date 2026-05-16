@@ -62,19 +62,19 @@ func (c *Config) validate() error {
 	}
 
 	if c.HTTP.ReadHeaderTimeout <= 0 {
-		return fmt.Errorf("http read header timeout must be greater than 0")
+		return fmt.Errorf("http read header timeout must be greater than 0 seconds")
 	}
 
-	if c.HTTP.ShutdownTimeout <= 20*time.Second {
-		return fmt.Errorf("http shutdown timeout must be greater than 20")
+	if c.HTTP.ShutdownTimeout <= 0*time.Second {
+		return fmt.Errorf("http shutdown timeout must be greater than 0 seconds")
 	}
 
-	if c.HTTP.IdleTimeout < 60*time.Second {
-		return fmt.Errorf("http idle timeout must be greater than or equal to 60 seconds")
+	if c.HTTP.IdleTimeout <= 0*time.Second {
+		return fmt.Errorf("http idle timeout must be greater than 0 seconds")
 	}
 
-	if c.HTTP.WriteTimeout < 10*time.Second {
-		return fmt.Errorf("http write timeout must be greater than or equal to 10 seconds")
+	if c.HTTP.WriteTimeout <= 0*time.Second {
+		return fmt.Errorf("http write timeout must be greater than 0 seconds")
 	}
 
 	if c.Postgres.DSN == "" {
