@@ -34,14 +34,19 @@ func NewPool(ctx context.Context, config *config.PostgresConfig) (*pgxpool.Pool,
 			return pool, nil
 		}
 
-		time.Sleep(delay)
+		select {
+		case <-ctx.Done():
+			pool.Close()
+			return nil, ctx.Err()
+		case <-time.After(delay):
+		}
 
 		delay *= 2
 	}
 
 	if pingErr != nil {
 		pool.Close()
-		return nil, fmt.Errorf("failed to ping postgres server: %w", err)
+		return nil, fmt.Errorf("failed to ping postgres server: %w", pingErr)
 	}
 
 	return pool, nil

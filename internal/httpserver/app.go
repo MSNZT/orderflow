@@ -6,9 +6,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"os"
-	"os/signal"
-	"syscall"
 
 	"github.com/MSNZT/orderflow/internal/config"
 	"github.com/MSNZT/orderflow/internal/router"
@@ -26,12 +23,12 @@ func New(config *config.Config, dbPool *pgxpool.Pool, log *slog.Logger) *App {
 
 	return &App{
 		server: &http.Server{
-			Addr:              config.HTTPServer.Addr,
+			Addr:              config.HTTP.Addr,
 			Handler:           router,
-			ReadTimeout:       config.HTTPServer.ReadTimeout,
-			ReadHeaderTimeout: config.HTTPServer.ReadHeaderTimeout,
-			WriteTimeout:      config.HTTPServer.WriteTimeout,
-			IdleTimeout:       config.HTTPServer.IdleTimeout,
+			ReadTimeout:       config.HTTP.ReadTimeout,
+			ReadHeaderTimeout: config.HTTP.ReadHeaderTimeout,
+			WriteTimeout:      config.HTTP.WriteTimeout,
+			IdleTimeout:       config.HTTP.IdleTimeout,
 		},
 		config: config,
 		logger: log,
@@ -39,10 +36,7 @@ func New(config *config.Config, dbPool *pgxpool.Pool, log *slog.Logger) *App {
 }
 
 func (a *App) Run(ctx context.Context) error {
-	stop := make(chan os.Signal, 1)
 	serverErrors := make(chan error, 1)
-	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
-	defer signal.Stop(stop)
 
 	go func() {
 		a.logger.Info("http server started", slog.String("addr", a.server.Addr))
@@ -58,11 +52,9 @@ func (a *App) Run(ctx context.Context) error {
 	case err := <-serverErrors:
 		a.logger.Error("server error", slog.String("error", err.Error()))
 		return fmt.Errorf("server error: %w", err)
-	case sig := <-stop:
-		a.logger.Info("shutdown started", slog.String("signal", sig.String()))
 	}
 
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), a.config.HTTPServer.ShutdownTimeout)
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), a.config.HTTP.ShutdownTimeout)
 	defer cancel()
 
 	if err := a.server.Shutdown(shutdownCtx); err != nil {

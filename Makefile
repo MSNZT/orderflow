@@ -1,7 +1,12 @@
-.PHONY: run test fmt tidy
+.PHONY: run test fmt tidy start-app stop-app
+
+CONFIG_PATH=./config/local.yaml
 
 run:
-	go run ./cmd/api
+	CONFIG_PATH=${CONFIG_PATH} go run ./cmd/api
+
+build:
+	go build -o bin/orderflow-api ./cmd/api
 
 test:
 	go test ./...
@@ -11,3 +16,9 @@ fmt:
 
 tidy:
 	go mod tidy
+
+start-app:
+	docker-compose up --build -d
+
+stop-app:
+	docker-compose down

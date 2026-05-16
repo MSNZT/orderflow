@@ -1,9 +1,11 @@
 package router
 
 import (
+	"context"
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -32,7 +34,10 @@ func (h *Handler) HealthLive(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) HealthReady(w http.ResponseWriter, r *http.Request) {
-	if err := h.dbPool.Ping(r.Context()); err != nil {
+	ctx, cancel := context.WithTimeout(r.Context(), 1*time.Second)
+	defer cancel()
+
+	if err := h.dbPool.Ping(ctx); err != nil {
 		h.log.Warn("postgres readiness check failed", slog.String("error", err.Error()))
 		_ = WriteJSON(w, http.StatusServiceUnavailable, HealthResponse{
 			Status: "error",
