@@ -17,8 +17,6 @@ services:
     image: migrate/migrate:v4.19.1
     profiles:
       - tools
-    env_file:
-      - .env
     volumes:
       - "./migrations:/migrations"
     depends_on:

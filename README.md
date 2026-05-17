@@ -103,7 +103,7 @@ make migrate-create name=migrate_name
 make migrate-up                      
 make migrate-down                    
 make migrate-version                  
-make migrate-force
+make migrate-force version=1
 ```
 
 ## Status
