@@ -43,16 +43,16 @@ health-ready:
 	curl http://localhost:8080/health/ready
 
 migrate-create:
-	docker-compose run --rm migrate create -ext sql -dir /migrations -seq ${name}
+	docker compose run --rm migrate create -ext sql -dir /migrations -seq ${name}
 
 migrate-up:
-	docker-compose run --rm migrate -path=/migrations -database "${POSTGRES_DSN}" up
+	docker compose run --rm migrate -path=/migrations -database "${POSTGRES_DSN}" up
 
 migrate-down:
-	docker-compose run --rm migrate -path=/migrations -database "${POSTGRES_DSN}" down 1
+	docker compose run --rm migrate -path=/migrations -database "${POSTGRES_DSN}" down 1
 
 migrate-version:
-	docker-compose run --rm migrate --path=/migrations -database "${POSTGRES_DSN}" version
+	docker compose run --rm migrate -path=/migrations -database "${POSTGRES_DSN}" version
 
 migrate-force:
-	docker-compose run --rm migrate --path=/migrations -database "${POSTGRES_DSN}" force ${version}
+	docker compose run --rm migrate -path=/migrations -database "${POSTGRES_DSN}" force ${version}
