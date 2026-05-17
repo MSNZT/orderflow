@@ -13,6 +13,15 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
+  migrate:
+    image: migrate/migrate:v4.19.1
+    profiles:
+      - tools
+    volumes:
+      - "./migrations:/migrations"
+    depends_on:
+      - postgres
+
   api:
     build:
       context: .

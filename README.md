@@ -96,6 +96,16 @@ make start-app  # start Docker Compose services
 make stop-app   # stop Docker Compose services
 ```
 
+## Migrations
+
+```bash
+make migrate-create name=migrate_name 
+make migrate-up                      
+make migrate-down                    
+make migrate-version                  
+make migrate-force version=1
+```
+
 ## Status
 
 Implemented:
