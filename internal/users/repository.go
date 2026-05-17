@@ -49,9 +49,15 @@ func (r *Repository) Create(ctx context.Context, user User) error {
 func (r *Repository) GetByEmail(ctx context.Context, email string) (*User, error) {
 	const op = "users.repository.GetByEmail"
 
-	query := `SELECT 
-		id, email, password_hash, role, create_at, updated_at 
-		FROM users 
+	query := `
+		SELECT 
+			id, 
+			email, 
+			password_hash, 
+			role, 
+			created_at, 
+			updated_at 
+		FROM users
 		WHERE email = $1`
 	var u User
 
@@ -72,8 +78,14 @@ func (r *Repository) GetByEmail(ctx context.Context, email string) (*User, error
 func (r *Repository) GetByID(ctx context.Context, id uuid.UUID) (*User, error) {
 	const op = "users.repository.GetByID"
 
-	query := `SELECT 
-		id, email, password_hash, role, create_at, updated_at 
+	query := `
+		SELECT 
+			id, 
+			email, 
+			password_hash, 
+			role, 
+			created_at, 
+			updated_at 
 		FROM users 
 		WHERE id = $1`
 
@@ -84,7 +96,7 @@ func (r *Repository) GetByID(ctx context.Context, id uuid.UUID) (*User, error) {
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, fmt.Errorf("%v: %w", op, ErrUserNotFound)
+			return nil, fmt.Errorf("%s: %w", op, ErrUserNotFound)
 		}
 
 		return nil, fmt.Errorf("%s: %w", op, err)
