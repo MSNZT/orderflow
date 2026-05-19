@@ -25,16 +25,16 @@ tidy:
 	go mod tidy
 
 start-app:
-	docker-compose up --build -d
+	docker compose up --build -d
 
 stop-app:
-	docker-compose down
+	docker compose down
 
 logs-api:
-	docker-compose logs -f api
+	docker compose logs -f api
 
 logs-postgres:
-	docker-compose logs -f postgres
+	docker compose logs -f postgres
 
 health-live:
 	curl http://localhost:8080/health/live
