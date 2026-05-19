@@ -43,6 +43,52 @@ func TestRepository_CreateAndGetByEmail(t *testing.T) {
 	if got.Role != user.Role {
 		t.Fatalf("expected role: %s, got: %v", user.Role, got.Role)
 	}
+
+	t.Cleanup(func() {
+		_, _ = pool.Exec(ctx, "DELETE FROM users WHERE id = $1", user.ID)
+	})
+}
+
+func TestRepository_CreateAndGetByID(t *testing.T) {
+	ctx := context.Background()
+	pool := newTestPool(t)
+
+	repo := NewRepository(pool)
+	user := User{
+		ID:           uuid.New(),
+		Email:        "test-" + uuid.NewString() + "@mail.com",
+		PasswordHash: "hash",
+		Role:         RoleCustomer,
+	}
+
+	if err := repo.Create(ctx, user); err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+
+	got, err := repo.GetByID(ctx, user.ID)
+	if err != nil {
+		t.Fatalf("get user by id: %v", err)
+	}
+
+	if got.ID != user.ID {
+		t.Fatalf("expected id: %s, got: %v", user.ID, got.ID)
+	}
+
+	if got.PasswordHash != user.PasswordHash {
+		t.Fatalf("expected password_hash: %s, got: %v", user.PasswordHash, got.PasswordHash)
+	}
+
+	if got.Role != user.Role {
+		t.Fatalf("expected role: %s, got: %v", user.Role, got.Role)
+	}
+
+	if got.Email != user.Email {
+		t.Fatalf("expected email %s, got %s", user.Email, got.Email)
+	}
+
+	t.Cleanup(func() {
+		_, _ = pool.Exec(ctx, "DELETE FROM users WHERE id = $1", user.ID)
+	})
 }
 
 func TestRepository_GetByEmail_NotFound(t *testing.T) {
@@ -62,12 +108,29 @@ func TestRepository_GetByEmail_NotFound(t *testing.T) {
 	}
 }
 
+func TestRepository_GetByID_NotFound(t *testing.T) {
+	ctx := context.Background()
+	pool := newTestPool(t)
+	repo := NewRepository(pool)
+
+	id := uuid.New()
+
+	_, err := repo.GetByID(ctx, id)
+	if err == nil {
+		t.Fatalf("expected error, got nil")
+	}
+
+	if !errors.Is(err, ErrUserNotFound) {
+		t.Fatalf("expected ErrUserNotFound, got %v", err)
+	}
+}
+
 func TestRepository_Create_DuplicateEmail(t *testing.T) {
 	ctx := context.Background()
 	pool := newTestPool(t)
 	repo := NewRepository(pool)
 
-	email := "dupling-" + uuid.NewString() + "@mail.com"
+	email := "duplicate-" + uuid.NewString() + "@mail.com"
 
 	first := User{
 		ID:           uuid.New(),
@@ -95,6 +158,10 @@ func TestRepository_Create_DuplicateEmail(t *testing.T) {
 	if !errors.Is(err, ErrEmailAlreadyUsed) {
 		t.Fatalf("expected ErrEmailAlreadyUsed, got %v", err)
 	}
+
+	t.Cleanup(func() {
+		_, _ = pool.Exec(ctx, "DELETE FROM users WHERE id = $1", first.ID)
+	})
 }
 
 func newTestPool(t *testing.T) *pgxpool.Pool {
