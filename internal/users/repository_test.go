@@ -27,6 +27,10 @@ func TestRepository_CreateAndGetByEmail(t *testing.T) {
 		t.Fatalf("create user: %v", err)
 	}
 
+	t.Cleanup(func() {
+		_, _ = pool.Exec(ctx, "DELETE FROM users WHERE id = $1", user.ID)
+	})
+
 	got, err := repo.GetByEmail(ctx, user.Email)
 	if err != nil {
 		t.Fatalf("get user by email: %v", err)
@@ -36,6 +40,10 @@ func TestRepository_CreateAndGetByEmail(t *testing.T) {
 		t.Fatalf("expected id: %s, got: %v", user.ID, got.ID)
 	}
 
+	if got.Email != user.Email {
+		t.Fatalf("expected email: %s, got: %v", user.Email, got.Email)
+	}
+
 	if got.PasswordHash != user.PasswordHash {
 		t.Fatalf("expected password_hash: %s, got: %v", user.PasswordHash, got.PasswordHash)
 	}
@@ -43,10 +51,6 @@ func TestRepository_CreateAndGetByEmail(t *testing.T) {
 	if got.Role != user.Role {
 		t.Fatalf("expected role: %s, got: %v", user.Role, got.Role)
 	}
-
-	t.Cleanup(func() {
-		_, _ = pool.Exec(ctx, "DELETE FROM users WHERE id = $1", user.ID)
-	})
 }
 
 func TestRepository_CreateAndGetByID(t *testing.T) {
@@ -64,6 +68,10 @@ func TestRepository_CreateAndGetByID(t *testing.T) {
 	if err := repo.Create(ctx, user); err != nil {
 		t.Fatalf("create user: %v", err)
 	}
+
+	t.Cleanup(func() {
+		_, _ = pool.Exec(ctx, "DELETE FROM users WHERE id = $1", user.ID)
+	})
 
 	got, err := repo.GetByID(ctx, user.ID)
 	if err != nil {
@@ -85,10 +93,6 @@ func TestRepository_CreateAndGetByID(t *testing.T) {
 	if got.Email != user.Email {
 		t.Fatalf("expected email %s, got %s", user.Email, got.Email)
 	}
-
-	t.Cleanup(func() {
-		_, _ = pool.Exec(ctx, "DELETE FROM users WHERE id = $1", user.ID)
-	})
 }
 
 func TestRepository_GetByEmail_NotFound(t *testing.T) {
@@ -150,6 +154,10 @@ func TestRepository_Create_DuplicateEmail(t *testing.T) {
 		t.Fatalf("create first user: %v", err)
 	}
 
+	t.Cleanup(func() {
+		_, _ = pool.Exec(ctx, "DELETE FROM users WHERE id = $1", first.ID)
+	})
+
 	err := repo.Create(ctx, second)
 	if err == nil {
 		t.Fatalf("expected err, got nil")
@@ -158,10 +166,6 @@ func TestRepository_Create_DuplicateEmail(t *testing.T) {
 	if !errors.Is(err, ErrEmailAlreadyUsed) {
 		t.Fatalf("expected ErrEmailAlreadyUsed, got %v", err)
 	}
-
-	t.Cleanup(func() {
-		_, _ = pool.Exec(ctx, "DELETE FROM users WHERE id = $1", first.ID)
-	})
 }
 
 func newTestPool(t *testing.T) *pgxpool.Pool {
