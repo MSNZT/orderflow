@@ -96,8 +96,17 @@ func TestService_Register(t *testing.T) {
 		t.Fatalf("expected password: %s, got: %s", "hashed:"+password, user.PasswordHash)
 	}
 
-	if string(user.Role) != string(RoleCustomer) {
+	if user.Role != RoleCustomer {
 		t.Fatalf("expected user role: %s, got: %s", RoleCustomer, user.Role)
+	}
+
+	savedUser, err := service.repo.GetByEmail(ctx, email)
+	if err != nil {
+		t.Errorf("get saved user: %v", err)
+	}
+
+	if savedUser.ID != user.ID {
+		t.Errorf("expected saved user id: %s, got: %s", user.ID, savedUser.ID)
 	}
 }
 
@@ -128,8 +137,8 @@ func TestService_Register_EmptyEmail(t *testing.T) {
 	password := "valid-password"
 
 	_, err := service.Register(ctx, emptyEmail, password)
-	if err == nil {
-		t.Fatalf("expected error: %s, but got nil", ErrInvalidEmail)
+	if !errors.Is(err, ErrInvalidEmail) {
+		t.Fatalf("expected ErrInvalidEmail, got: %v", err)
 	}
 }
 
@@ -140,12 +149,12 @@ func TestService_Register_ShortPassword(t *testing.T) {
 	hasher := newFakePasswordHasher()
 	service := NewService(repo, hasher)
 
-	emptyEmail := "post@mail.com"
-	shortPassword := "pass"
+	email := "post@mail.com"
+	shortPassword := "invalid"
 
-	_, err := service.Register(ctx, emptyEmail, shortPassword)
-	if err == nil {
-		t.Fatalf("expected error: %s, but got nil", ErrInvalidPassword)
+	_, err := service.Register(ctx, email, shortPassword)
+	if !errors.Is(err, ErrInvalidPassword) {
+		t.Fatalf("expected ErrInvalidPassword, got: %v", err)
 	}
 }
 
@@ -165,7 +174,7 @@ func TestService_Register_DuplicateEmail(t *testing.T) {
 	}
 
 	_, err = service.Register(ctx, email, password)
-	if err == nil {
-		t.Errorf("expected error: %s, got nil", ErrEmailAlreadyUsed)
+	if !errors.Is(err, ErrEmailAlreadyUsed) {
+		t.Errorf("expected ErrEmailAlreadyUsed, got %v", err)
 	}
 }
