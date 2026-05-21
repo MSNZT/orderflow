@@ -8,8 +8,6 @@ import (
 	"net/http"
 
 	"github.com/MSNZT/orderflow/internal/config"
-	"github.com/MSNZT/orderflow/internal/router"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type App struct {
@@ -18,13 +16,11 @@ type App struct {
 	logger *slog.Logger
 }
 
-func New(config *config.Config, dbPool *pgxpool.Pool, log *slog.Logger) *App {
-	router := router.NewRouter(dbPool, log)
-
+func New(config *config.Config, log *slog.Logger, handler http.Handler) *App {
 	return &App{
 		server: &http.Server{
 			Addr:              config.HTTP.Addr,
-			Handler:           router,
+			Handler:           handler,
 			ReadTimeout:       config.HTTP.ReadTimeout,
 			ReadHeaderTimeout: config.HTTP.ReadHeaderTimeout,
 			WriteTimeout:      config.HTTP.WriteTimeout,
