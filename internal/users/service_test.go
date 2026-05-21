@@ -102,11 +102,11 @@ func TestService_Register(t *testing.T) {
 
 	savedUser, err := service.repo.GetByEmail(ctx, email)
 	if err != nil {
-		t.Errorf("get saved user: %v", err)
+		t.Fatalf("get saved user: %v", err)
 	}
 
 	if savedUser.ID != user.ID {
-		t.Errorf("expected saved user id: %s, got: %s", user.ID, savedUser.ID)
+		t.Fatalf("expected saved user id: %s, got: %s", user.ID, savedUser.ID)
 	}
 }
 
@@ -175,6 +175,6 @@ func TestService_Register_DuplicateEmail(t *testing.T) {
 
 	_, err = service.Register(ctx, email, password)
 	if !errors.Is(err, ErrEmailAlreadyUsed) {
-		t.Errorf("expected ErrEmailAlreadyUsed, got %v", err)
+		t.Fatalf("expected ErrEmailAlreadyUsed, got %v", err)
 	}
 }
