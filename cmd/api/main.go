@@ -7,10 +7,14 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/MSNZT/orderflow/internal/auth"
 	"github.com/MSNZT/orderflow/internal/config"
+	"github.com/MSNZT/orderflow/internal/health"
 	"github.com/MSNZT/orderflow/internal/httpserver"
 	"github.com/MSNZT/orderflow/internal/logger"
 	"github.com/MSNZT/orderflow/internal/platform/postgres"
+	"github.com/MSNZT/orderflow/internal/router"
+	"github.com/MSNZT/orderflow/internal/users"
 )
 
 func main() {
@@ -31,7 +35,17 @@ func main() {
 	}
 	defer dbPool.Close()
 
-	server := httpserver.New(cfg, dbPool, log)
+	const cost = 12
+	healthHandler := health.NewHandler(log, dbPool)
+
+	usersRepository := users.NewRepository(dbPool)
+	hasher := users.NewBcryptHasher(cost)
+	usersService := users.NewService(usersRepository, hasher)
+	authHandler := auth.NewHandler(log, usersService)
+
+	router := router.NewRouter(authHandler, healthHandler)
+
+	server := httpserver.New(cfg, log, router)
 
 	if err := server.Run(ctx); err != nil {
 		log.Error("application failed", slog.String("error", err.Error()))
