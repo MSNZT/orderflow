@@ -17,7 +17,7 @@ func NewRouter(authHandler *auth.Handler, healthHandler *health.Handler) *chi.Mu
 	r.Get("/health/ready", healthHandler.Ready)
 
 	r.Route("/api/v1", func(r chi.Router) {
-		r.Post("/register", authHandler.Register)
+		r.Post("/auth/register", authHandler.Register)
 	})
 	return r
 }

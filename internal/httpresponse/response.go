@@ -15,10 +15,6 @@ type StatusResponse struct {
 	Message string `json:"message,omitempty"`
 }
 
-type ErrorResponse struct {
-	Error string `json:"error"`
-}
-
 func JSON(w http.ResponseWriter, statusCode int, v any) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)

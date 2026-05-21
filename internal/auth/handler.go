@@ -36,22 +36,29 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	var req registerRequest
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		err := httpresponse.JSON(w, http.StatusBadRequest, httpresponse.StatusResponse{
+		_ = httpresponse.JSON(w, http.StatusBadRequest, httpresponse.StatusResponse{
 			Status:  "error",
 			Message: "invalid request body",
 		})
-
-		if err != nil {
-			httpresponse.Error(w, http.StatusInternalServerError, "internal server error")
-		}
-
 		return
 	}
 
 	user, err := h.usersService.Register(r.Context(), req.Email, req.Password)
 	if err != nil {
-		h.log.Error("failed to register user", slog.String("op", op), slog.String("error", err.Error()))
-		mapError(err, w)
+		switch {
+		case errors.Is(err, users.ErrInvalidEmail):
+			_ = httpresponse.Error(w, http.StatusBadRequest, "invalid email")
+			return
+		case errors.Is(err, users.ErrInvalidPassword):
+			_ = httpresponse.Error(w, http.StatusBadRequest, "invalid password")
+			return
+		case errors.Is(err, users.ErrEmailAlreadyUsed):
+			_ = httpresponse.Error(w, http.StatusConflict, "email already used")
+			return
+		default:
+			h.log.Error("failed to register user", slog.String("op", op), slog.String("error", err.Error()))
+			_ = httpresponse.Error(w, http.StatusInternalServerError, "internal server error")
+		}
 		return
 	}
 
@@ -61,23 +68,8 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		Role:  user.Role,
 	}
 
-	if err := httpresponse.JSON(w, http.StatusOK, res); err != nil {
-		h.log.Error("failed to send register response", slog.String("op", op), slog.String("err", err.Error()))
+	if err := httpresponse.JSON(w, http.StatusCreated, res); err != nil {
+		h.log.Error("failed to send register response", slog.String("op", op), slog.String("error", err.Error()))
 		httpresponse.Error(w, http.StatusInternalServerError, "internal server error")
-	}
-}
-
-func mapError(err error, w http.ResponseWriter) {
-	switch {
-	case errors.Is(err, users.ErrInvalidEmail):
-		_ = httpresponse.Error(w, http.StatusBadRequest, "invalid email")
-		return
-	case errors.Is(err, users.ErrInvalidPassword):
-		_ = httpresponse.Error(w, http.StatusBadRequest, "invalid password")
-		return
-	case errors.Is(err, users.ErrEmailAlreadyUsed):
-		_ = httpresponse.Error(w, http.StatusConflict, "email already used")
-	default:
-		_ = httpresponse.Error(w, http.StatusInternalServerError, "internal server error")
 	}
 }
