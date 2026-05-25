@@ -2,6 +2,7 @@ package router
 
 import (
 	"log/slog"
+	"net/http"
 
 	"github.com/MSNZT/orderflow/internal/auth"
 	"github.com/MSNZT/orderflow/internal/health"
@@ -10,7 +11,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 )
 
-func NewRouter(log *slog.Logger, authHandler *auth.Handler, healthHandler *health.Handler) *chi.Mux {
+func NewRouter(log *slog.Logger, authHandler *auth.Handler, healthHandler *health.Handler) http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)

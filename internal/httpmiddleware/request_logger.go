@@ -37,12 +37,12 @@ func RequestLogger(log *slog.Logger) func(http.Handler) http.Handler {
 			requestID := middleware.GetReqID(r.Context())
 
 			log.Info(
-				"http request completted",
+				"http request completed",
 				slog.String("method", r.Method),
 				slog.String("path", r.URL.Path),
 				slog.Int("status", writer.statusCode),
-				slog.Int64("duration", duration.Milliseconds()),
-				slog.String("requestID", requestID),
+				slog.Int64("duration_ms", duration.Milliseconds()),
+				slog.String("request_id", requestID),
 			)
 		})
 	}
