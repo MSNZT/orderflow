@@ -43,7 +43,7 @@ func main() {
 	usersService := users.NewService(usersRepository, hasher)
 	authHandler := auth.NewHandler(log, usersService)
 
-	router := router.NewRouter(authHandler, healthHandler)
+	router := router.NewRouter(log, authHandler, healthHandler)
 
 	server := httpserver.New(cfg, log, router)
 
