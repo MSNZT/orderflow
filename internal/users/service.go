@@ -21,8 +21,9 @@ type Service struct {
 }
 
 var (
-	ErrInvalidEmail    = errors.New("invalid email")
-	ErrInvalidPassword = errors.New("invalid password")
+	ErrInvalidEmail       = errors.New("invalid email")
+	ErrInvalidPassword    = errors.New("invalid password")
+	ErrInvalidCredentials = errors.New("invalid credentials")
 )
 
 func NewService(repo UserRepository, hasher PasswordHasher) *Service {
@@ -62,4 +63,26 @@ func (s *Service) Register(ctx context.Context, email, password string) (*User, 
 	}
 
 	return &user, nil
+}
+
+func (s *Service) Login(ctx context.Context, email string, password string) (*User, error) {
+	const op = "users.service.Login"
+
+	if email == "" || !strings.Contains(email, "@") {
+		return nil, fmt.Errorf("%s: %w", op, ErrInvalidEmail)
+	}
+
+	user, err := s.repo.GetByEmail(ctx, email)
+	if err != nil {
+		if errors.Is(err, ErrUserNotFound) {
+			return nil, fmt.Errorf("%s: %w", op, ErrInvalidCredentials)
+		}
+		return nil, fmt.Errorf("%s: %w", op, err)
+	}
+
+	if err := s.hasher.Compare(user.PasswordHash, password); err != nil {
+		return nil, fmt.Errorf("%s: %w", op, ErrInvalidCredentials)
+	}
+
+	return user, nil
 }

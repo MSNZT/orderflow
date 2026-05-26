@@ -178,3 +178,79 @@ func TestService_Register_DuplicateEmail(t *testing.T) {
 		t.Errorf("expected ErrEmailAlreadyUsed, got %v", err)
 	}
 }
+
+func TestService_Login_Success(t *testing.T) {
+	ctx := context.Background()
+
+	repo := newFakeUserRepository()
+	hasher := newFakePasswordHasher()
+	service := NewService(repo, hasher)
+
+	email := uuid.NewString() + "@mail.com"
+	password := "valid-password"
+
+	_, err := service.Register(ctx, email, password)
+	if err != nil {
+		t.Fatalf("unexpected error: %s", err)
+	}
+
+	_, err = service.Login(ctx, email, password)
+	if err != nil {
+		t.Fatalf("unexpected error: %s", err)
+	}
+}
+
+func TestService_Login_UserNotFound(t *testing.T) {
+	ctx := context.Background()
+
+	repo := newFakeUserRepository()
+	hasher := newFakePasswordHasher()
+	service := NewService(repo, hasher)
+
+	email := uuid.NewString() + "@mail.com"
+	password := "valid-password"
+
+	_, err := service.Login(ctx, email, password)
+	if !errors.Is(err, ErrInvalidCredentials) {
+		t.Fatalf("expected ErrInvalidCredentials, got: %v", err)
+	}
+}
+
+func TestService_Login_WrongPassword(t *testing.T) {
+	ctx := context.Background()
+
+	repo := newFakeUserRepository()
+	hasher := newFakePasswordHasher()
+	service := NewService(repo, hasher)
+
+	email := uuid.NewString() + "@mail.com"
+	password := "valid-password"
+
+	_, err := service.Register(ctx, email, password)
+	if err != nil {
+		t.Fatalf("unexpected error: %s", err)
+	}
+
+	wrongPassword := "wrong-password"
+
+	_, err = service.Login(ctx, email, wrongPassword)
+	if !errors.Is(err, ErrInvalidCredentials) {
+		t.Fatalf("expected ErrInvalidCredentials, got: %v", err)
+	}
+}
+
+func TestService_Login_InvalidEmail(t *testing.T) {
+	ctx := context.Background()
+
+	repo := newFakeUserRepository()
+	hasher := newFakePasswordHasher()
+	service := NewService(repo, hasher)
+
+	invalidEmail := "invalid-email."
+	password := "valid-password"
+
+	_, err := service.Login(ctx, invalidEmail, password)
+	if !errors.Is(err, ErrInvalidEmail) {
+		t.Fatalf("expected ErrInvalidEmail, got: %v", err)
+	}
+}

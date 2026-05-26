@@ -21,6 +21,17 @@ type registerResponse struct {
 	Role  users.Role `json:"role"`
 }
 
+type loginRequest struct {
+	Email    string `json:"email"`
+	Password string `json:"string"`
+}
+
+type loginResponse struct {
+	ID    string     `json:"id"`
+	Email string     `json:"email"`
+	Role  users.Role `json:"role"`
+}
+
 type Handler struct {
 	log          *slog.Logger
 	usersService *users.Service
@@ -72,4 +83,36 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		h.log.Error("failed to send register response", slog.String("op", op), slog.String("error", err.Error()))
 		httpresponse.Error(w, http.StatusInternalServerError, "internal server error")
 	}
+}
+
+func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
+	const op = "auth.handler.Login"
+
+	var req loginRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		_ = httpresponse.JSON(w, http.StatusBadRequest, httpresponse.StatusResponse{
+			Status:  "error",
+			Message: "invalid request body",
+		})
+		return
+	}
+
+	_, err := h.usersService.Login(r.Context(), req.Email, req.Password)
+	if err != nil {
+		switch {
+		case errors.Is(err, users.ErrInvalidEmail):
+			_ = httpresponse.Error(w, http.StatusBadRequest, "invalid email")
+			return
+		case errors.Is(err, users.ErrInvalidCredentials):
+			_ = httpresponse.Error(w, http.StatusUnauthorized, "invalid credentials")
+			return
+		default:
+			h.log.Error("failed to login user", slog.String("op", op), slog.String("error", err.Error()))
+			_ = httpresponse.Error(w, http.StatusInternalServerError, "internal server error")
+			return
+		}
+	}
+
+	_ = httpresponse.JSON(w, http.StatusOK, httpresponse.StatusOK)
+
 }
