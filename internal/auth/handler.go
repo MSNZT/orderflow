@@ -95,7 +95,10 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		switch {
 		case errors.Is(err, users.ErrInvalidEmail):
-			_ = httpresponse.Error(w, http.StatusBadRequest, "invalid email")
+			_ = httpresponse.Error(w, http.StatusUnauthorized, "invalid credentials")
+			return
+		case errors.Is(err, users.ErrInvalidPassword):
+			_ = httpresponse.Error(w, http.StatusUnauthorized, "invalid credentials")
 			return
 		case errors.Is(err, users.ErrInvalidCredentials):
 			_ = httpresponse.Error(w, http.StatusUnauthorized, "invalid credentials")
