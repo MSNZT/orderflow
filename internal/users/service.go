@@ -41,7 +41,8 @@ func (s *Service) Register(ctx context.Context, email, password string) (*User, 
 		return nil, fmt.Errorf("%s: %w", op, ErrInvalidEmail)
 	}
 
-	if isPasswordInvalid(password) {
+	password = normalizePassword(password)
+	if !isPasswordValid(password) {
 		return nil, fmt.Errorf("%s: %w", op, ErrInvalidPassword)
 	}
 
@@ -68,12 +69,10 @@ func (s *Service) Login(ctx context.Context, email string, password string) (*Us
 	const op = "users.service.Login"
 
 	email = normalizeEmail(email)
-	if !isEmailValid(email) {
-		return nil, fmt.Errorf("%s: %w", op, ErrInvalidEmail)
-	}
+	password = normalizePassword(password)
 
-	if isPasswordInvalid(password) {
-		return nil, fmt.Errorf("%s: %w", op, ErrInvalidPassword)
+	if !isEmailValid(email) || !isPasswordValid(password) {
+		return nil, fmt.Errorf("%s: %w", op, ErrInvalidCredentials)
 	}
 
 	user, err := s.repo.GetByEmail(ctx, email)
@@ -95,11 +94,14 @@ func normalizeEmail(email string) string {
 	return strings.TrimSpace(strings.ToLower(email))
 }
 
+func normalizePassword(password string) string {
+	return strings.TrimSpace(password)
+}
+
 func isEmailValid(email string) bool {
 	return email != "" && strings.Contains(email, "@")
 }
 
-func isPasswordInvalid(password string) bool {
-	password = strings.TrimSpace(password)
-	return len(password) < 8
+func isPasswordValid(password string) bool {
+	return len(password) >= 8
 }

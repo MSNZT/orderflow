@@ -121,9 +121,15 @@ func TestService_Register_InvalidEmail(t *testing.T) {
 	password := "valid-password"
 
 	_, err := service.Register(ctx, invalidEmail, password)
+
 	if err == nil {
-		t.Fatalf("expected error: %s, but got nil", ErrInvalidEmail)
+		t.Fatalf("expected error, got nil")
 	}
+
+	if !errors.Is(err, ErrInvalidEmail) {
+		t.Fatalf("expected error: %s, but got: %v", ErrInvalidEmail, err)
+	}
+
 }
 
 func TestService_Register_EmptyEmail(t *testing.T) {
@@ -263,7 +269,7 @@ func TestService_Login_InvalidEmail(t *testing.T) {
 	password := "valid-password"
 
 	_, err := service.Login(ctx, invalidEmail, password)
-	if !errors.Is(err, ErrInvalidEmail) {
-		t.Fatalf("expected ErrInvalidEmail, got: %v", err)
+	if !errors.Is(err, ErrInvalidCredentials) {
+		t.Fatalf("expected ErrInvalidCredentials, got: %v", err)
 	}
 }
