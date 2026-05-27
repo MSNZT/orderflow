@@ -33,7 +33,7 @@ func Auth(tokenParser TokenParser) func(http.Handler) http.Handler {
 
 			userID, err := uuid.Parse(claims.Subject)
 			if err != nil {
-				httpresponse.Error(w, http.StatusUnauthorized, "unauthorized")
+				_ = httpresponse.Error(w, http.StatusUnauthorized, "unauthorized")
 				return
 			}
 
