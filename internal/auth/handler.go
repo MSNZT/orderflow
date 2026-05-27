@@ -23,7 +23,7 @@ type registerResponse struct {
 
 type loginRequest struct {
 	Email    string `json:"email"`
-	Password string `json:"string"`
+	Password string `json:"password"`
 }
 
 type loginResponse struct {
@@ -97,7 +97,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err := h.usersService.Login(r.Context(), req.Email, req.Password)
+	user, err := h.usersService.Login(r.Context(), req.Email, req.Password)
 	if err != nil {
 		switch {
 		case errors.Is(err, users.ErrInvalidEmail):
@@ -113,6 +113,15 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	_ = httpresponse.JSON(w, http.StatusOK, httpresponse.StatusOK)
+	res := loginResponse{
+		ID:    user.ID.String(),
+		Email: user.Email,
+		Role:  user.Role,
+	}
+
+	if err := httpresponse.JSON(w, http.StatusOK, res); err != nil {
+		h.log.Error("failed to send login response", slog.String("op", op), slog.String("error", err.Error()))
+		httpresponse.Error(w, http.StatusInternalServerError, "internal server error")
+	}
 
 }
