@@ -24,6 +24,7 @@ var (
 	ErrInvalidEmail       = errors.New("invalid email")
 	ErrInvalidPassword    = errors.New("invalid password")
 	ErrInvalidCredentials = errors.New("invalid credentials")
+	ErrUnauthorized       = errors.New("unauthorized")
 )
 
 func NewService(repo UserRepository, hasher PasswordHasher) *Service {
@@ -88,6 +89,23 @@ func (s *Service) Login(ctx context.Context, email string, password string) (*Us
 	}
 
 	return user, nil
+}
+
+func (s *Service) Me(ctx context.Context, userID uuid.UUID) (*User, error) {
+	const op = "users.service.Me"
+
+	user, err := s.repo.GetByID(ctx, userID)
+
+	if err != nil {
+		if errors.Is(err, ErrUserNotFound) {
+			return nil, fmt.Errorf("%s: %w", op, ErrUnauthorized)
+		}
+
+		return nil, fmt.Errorf("%s: %w", op, err)
+	}
+
+	return user, nil
+
 }
 
 func normalizeEmail(email string) string {

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/MSNZT/orderflow/internal/authcontext"
 	"github.com/MSNZT/orderflow/internal/httpresponse"
 	"github.com/MSNZT/orderflow/internal/users"
 	"github.com/google/uuid"
@@ -92,7 +93,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 
 	if err := httpresponse.JSON(w, http.StatusCreated, res); err != nil {
 		h.log.Error("failed to send register response", slog.String("op", op), slog.String("error", err.Error()))
-		httpresponse.Error(w, http.StatusInternalServerError, "internal server error")
+		_ = httpresponse.Error(w, http.StatusInternalServerError, "internal server error")
 	}
 }
 
@@ -137,7 +138,43 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 
 	if err := httpresponse.JSON(w, http.StatusOK, res); err != nil {
 		h.log.Error("failed to send login response", slog.String("op", op), slog.String("error", err.Error()))
-		httpresponse.Error(w, http.StatusInternalServerError, "internal server error")
+		_ = httpresponse.Error(w, http.StatusInternalServerError, "internal server error")
+	}
+}
+
+func (h *Handler) Me(w http.ResponseWriter, r *http.Request) {
+	const op = "auth.handler.Me"
+
+	userID, ok := authcontext.UserID(r.Context())
+
+	if !ok {
+		_ = httpresponse.Error(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	user, err := h.usersService.Me(r.Context(), userID)
+	if err != nil {
+		switch {
+		case errors.Is(err, users.ErrUnauthorized):
+			_ = httpresponse.Error(w, http.StatusUnauthorized, "unauthorized")
+			return
+		default:
+			h.log.Error("failed to get user", slog.String("op", op), slog.String("error", err.Error()))
+			_ = httpresponse.Error(w, http.StatusInternalServerError, "internal server error")
+			return
+		}
+	}
+
+	res := userResponse{
+		ID:    user.ID.String(),
+		Email: user.Email,
+		Role:  user.Role,
+	}
+
+	if err := httpresponse.JSON(w, http.StatusOK, res); err != nil {
+		h.log.Error("failed to send me response", slog.String("op", op), slog.String("error", err.Error()))
+		_ = httpresponse.Error(w, http.StatusInternalServerError, "internal server error")
+		return
 	}
 
 }
