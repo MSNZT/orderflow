@@ -9,8 +9,8 @@ import (
 )
 
 type Manager struct {
-	secret    []byte        `yaml:"secret" env:"JWT_SECRET"`
-	accessTTL time.Duration `yaml:"access_ttl" env:"JWT_ACCESS_TTL"`
+	secret    []byte
+	accessTTL time.Duration
 }
 
 type Claims struct {
@@ -38,4 +38,8 @@ func (m *Manager) GenerateAccessToken(userID uuid.UUID, role users.Role) (string
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString(m.secret)
+}
+
+func (m *Manager) AccessTTL() time.Duration {
+	return m.accessTTL
 }

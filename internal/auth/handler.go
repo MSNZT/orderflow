@@ -5,9 +5,9 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/MSNZT/orderflow/internal/httpresponse"
-	"github.com/MSNZT/orderflow/internal/token"
 	"github.com/MSNZT/orderflow/internal/users"
 	"github.com/google/uuid"
 )
@@ -48,9 +48,10 @@ type Handler struct {
 
 type TokenManager interface {
 	GenerateAccessToken(userID uuid.UUID, role users.Role) (string, error)
+	AccessTTL() time.Duration
 }
 
-func NewHandler(log *slog.Logger, usersService *users.Service, tokenManager *token.Manager) *Handler {
+func NewHandler(log *slog.Logger, usersService *users.Service, tokenManager TokenManager) *Handler {
 	return &Handler{log: log, usersService: usersService, tokenManager: tokenManager}
 }
 
@@ -126,7 +127,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 
 	res := loginResponse{
 		AccessToken: token,
-		ExpiresIn:   900,
+		ExpiresIn:   int64(h.tokenManager.AccessTTL().Seconds()),
 		User: userResponse{
 			ID:    user.ID.String(),
 			Email: user.Email,
