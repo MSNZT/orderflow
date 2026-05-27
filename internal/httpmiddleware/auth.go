@@ -21,13 +21,13 @@ func Auth(tokenParser TokenParser) func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			accessToken, err := extractAuthorizationToken(r)
 			if err != nil {
-				httpresponse.Error(w, http.StatusUnauthorized, "unauthorized")
+				_ = httpresponse.Error(w, http.StatusUnauthorized, "unauthorized")
 				return
 			}
 
 			claims, err := tokenParser.ParseAccessToken(accessToken)
 			if err != nil {
-				httpresponse.Error(w, http.StatusUnauthorized, "unauthorized")
+				_ = httpresponse.Error(w, http.StatusUnauthorized, "unauthorized")
 				return
 			}
 

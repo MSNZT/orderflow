@@ -7,7 +7,7 @@ import (
 	"github.com/google/uuid"
 )
 
-type contextKey = string
+type contextKey string
 
 const (
 	userIDKey   contextKey = "user_id"

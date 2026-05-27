@@ -143,6 +143,8 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) Me(w http.ResponseWriter, r *http.Request) {
+	const op = "auth.handler.Me"
+
 	userID, ok := authcontext.UserID(r.Context())
 
 	if !ok {
@@ -157,6 +159,7 @@ func (h *Handler) Me(w http.ResponseWriter, r *http.Request) {
 			_ = httpresponse.Error(w, http.StatusUnauthorized, "unauthorized")
 			return
 		default:
+			h.log.Error("failed to get user", slog.String("op", op), slog.String("error", err.Error()))
 			_ = httpresponse.Error(w, http.StatusInternalServerError, "internal server error")
 			return
 		}
@@ -169,6 +172,7 @@ func (h *Handler) Me(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := httpresponse.JSON(w, http.StatusOK, res); err != nil {
+		h.log.Error("failed to send me response", slog.String("op", op), slog.String("error", err.Error()))
 		_ = httpresponse.Error(w, http.StatusInternalServerError, "internal server error")
 		return
 	}
