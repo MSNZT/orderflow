@@ -36,13 +36,11 @@ func NewService(repo UserRepository, hasher PasswordHasher) *Service {
 func (s *Service) Register(ctx context.Context, email, password string) (*User, error) {
 	const op = "users.service.Register"
 
-	email = strings.TrimSpace(strings.ToLower(email))
-
-	if email == "" || !strings.Contains(email, "@") {
+	if !isEmailValid(normalizeEmail(email)) {
 		return nil, fmt.Errorf("%s: %w", op, ErrInvalidEmail)
 	}
 
-	if len(password) < 8 {
+	if isPasswordValid(password) {
 		return nil, fmt.Errorf("%s: %w", op, ErrInvalidPassword)
 	}
 
@@ -68,8 +66,12 @@ func (s *Service) Register(ctx context.Context, email, password string) (*User, 
 func (s *Service) Login(ctx context.Context, email string, password string) (*User, error) {
 	const op = "users.service.Login"
 
-	if email == "" || !strings.Contains(email, "@") {
+	if !isEmailValid(normalizeEmail(email)) {
 		return nil, fmt.Errorf("%s: %w", op, ErrInvalidEmail)
+	}
+
+	if isPasswordValid(password) {
+		return nil, fmt.Errorf("%s: %w", op, ErrInvalidCredentials)
 	}
 
 	user, err := s.repo.GetByEmail(ctx, email)
@@ -85,4 +87,17 @@ func (s *Service) Login(ctx context.Context, email string, password string) (*Us
 	}
 
 	return user, nil
+}
+
+func normalizeEmail(email string) string {
+	return strings.TrimSpace(strings.ToLower(email))
+}
+
+func isEmailValid(email string) bool {
+	return email != "" && strings.Contains(email, "@")
+}
+
+func isPasswordValid(password string) bool {
+	password = strings.TrimSpace(password)
+	return len(password) < 8
 }

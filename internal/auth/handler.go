@@ -47,10 +47,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	var req registerRequest
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		_ = httpresponse.JSON(w, http.StatusBadRequest, httpresponse.StatusResponse{
-			Status:  "error",
-			Message: "invalid request body",
-		})
+		_ = httpresponse.Error(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
@@ -90,10 +87,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 
 	var req loginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		_ = httpresponse.JSON(w, http.StatusBadRequest, httpresponse.StatusResponse{
-			Status:  "error",
-			Message: "invalid request body",
-		})
+		_ = httpresponse.Error(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 

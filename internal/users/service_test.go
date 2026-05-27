@@ -194,10 +194,23 @@ func TestService_Login_Success(t *testing.T) {
 		t.Fatalf("unexpected error: %s", err)
 	}
 
-	_, err = service.Login(ctx, email, password)
+	user, err := service.Login(ctx, email, password)
 	if err != nil {
 		t.Fatalf("unexpected error: %s", err)
 	}
+
+	if user.Email != email {
+		t.Fatalf("expected email: %s, got: %s", email, user.Email)
+	}
+
+	if user.Role != RoleCustomer {
+		t.Fatalf("expected role: %s, got: %s", RoleCustomer, user.Role)
+	}
+
+	if user.ID == uuid.Nil {
+		t.Fatalf("expected user id, got nil")
+	}
+
 }
 
 func TestService_Login_UserNotFound(t *testing.T) {
