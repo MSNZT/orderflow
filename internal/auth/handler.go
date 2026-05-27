@@ -7,7 +7,9 @@ import (
 	"net/http"
 
 	"github.com/MSNZT/orderflow/internal/httpresponse"
+	"github.com/MSNZT/orderflow/internal/token"
 	"github.com/MSNZT/orderflow/internal/users"
+	"github.com/google/uuid"
 )
 
 type registerRequest struct {
@@ -27,6 +29,12 @@ type loginRequest struct {
 }
 
 type loginResponse struct {
+	AccessToken string       `json:"access_token"`
+	ExpiresIn   int64        `json:"expires_in"`
+	User        userResponse `json:"user"`
+}
+
+type userResponse struct {
 	ID    string     `json:"id"`
 	Email string     `json:"email"`
 	Role  users.Role `json:"role"`
@@ -35,10 +43,15 @@ type loginResponse struct {
 type Handler struct {
 	log          *slog.Logger
 	usersService *users.Service
+	tokenManager TokenManager
 }
 
-func NewHandler(log *slog.Logger, usersService *users.Service) *Handler {
-	return &Handler{log: log, usersService: usersService}
+type TokenManager interface {
+	GenerateAccessToken(userID uuid.UUID, role users.Role) (string, error)
+}
+
+func NewHandler(log *slog.Logger, usersService *users.Service, tokenManager *token.Manager) *Handler {
+	return &Handler{log: log, usersService: usersService, tokenManager: tokenManager}
 }
 
 func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
@@ -104,10 +117,21 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	token, err := h.tokenManager.GenerateAccessToken(user.ID, user.Role)
+	if err != nil {
+		h.log.Error("failed to generate access token", slog.String("op", op), slog.String("error", err.Error()))
+		_ = httpresponse.Error(w, http.StatusInternalServerError, "internal server error")
+		return
+	}
+
 	res := loginResponse{
-		ID:    user.ID.String(),
-		Email: user.Email,
-		Role:  user.Role,
+		AccessToken: token,
+		ExpiresIn:   900,
+		User: userResponse{
+			ID:    user.ID.String(),
+			Email: user.Email,
+			Role:  user.Role,
+		},
 	}
 
 	if err := httpresponse.JSON(w, http.StatusOK, res); err != nil {

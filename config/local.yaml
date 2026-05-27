@@ -11,3 +11,7 @@ postgres:
   max_conns: 10
   min_conns: 0
   max_conn_lifetime: 30m
+
+jwt:
+  secret: "secret-jwt-change-me"
+  access_ttl: 15m

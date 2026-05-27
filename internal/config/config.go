@@ -11,6 +11,7 @@ import (
 type Config struct {
 	HTTP     HTTPConfig     `yaml:"http"`
 	Postgres PostgresConfig `yaml:"postgres"`
+	JWT      JWTConfig      `yaml:"jwt"`
 }
 
 type HTTPConfig struct {
@@ -27,6 +28,11 @@ type PostgresConfig struct {
 	MaxConns        int32         `yaml:"max_conns" env:"POSTGRES_MAX_CONNS"`
 	MinConns        int32         `yaml:"min_conns" env:"POSTGRES_MIN_CONNS"`
 	MaxConnLifetime time.Duration `yaml:"max_conn_lifetime" env:"POSTGRES_MAX_CONN_LIFETIME"`
+}
+
+type JWTConfig struct {
+	Secret    string        `yaml:"secret" env:"JWT_SECRET"`
+	AccessTTL time.Duration `yaml:"access_ttl" env:"JWT_ACCESS_TTL"`
 }
 
 func Load() (*Config, error) {
@@ -95,6 +101,14 @@ func (c *Config) validate() error {
 
 	if c.Postgres.MinConns > c.Postgres.MaxConns {
 		return fmt.Errorf("postgres min conns cannot be greater than max conns")
+	}
+
+	if c.JWT.Secret == "" {
+		return fmt.Errorf("jwt secret is required")
+	}
+
+	if c.JWT.AccessTTL <= 0 {
+		return fmt.Errorf("jwt access ttl must be greater than 0")
 	}
 
 	return nil
