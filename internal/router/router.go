@@ -11,7 +11,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 )
 
-func NewRouter(log *slog.Logger, authHandler *auth.Handler, healthHandler *health.Handler) http.Handler {
+func NewRouter(log *slog.Logger, authHandler *auth.Handler, healthHandler *health.Handler, tokenParser httpmiddleware.TokenParser) http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
@@ -24,6 +24,12 @@ func NewRouter(log *slog.Logger, authHandler *auth.Handler, healthHandler *healt
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Post("/auth/register", authHandler.Register)
 		r.Post("/auth/login", authHandler.Login)
+
+		r.Group(func(r chi.Router) {
+			r.Use(httpmiddleware.Auth(tokenParser))
+			r.Get("/auth/me", authHandler.Me)
+		})
+
 	})
 	return r
 }

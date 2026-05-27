@@ -45,7 +45,7 @@ func main() {
 	tokenManager := token.NewManager(cfg.JWT.Secret, cfg.JWT.AccessTTL)
 	authHandler := auth.NewHandler(log, usersService, tokenManager)
 
-	router := router.NewRouter(log, authHandler, healthHandler)
+	router := router.NewRouter(log, authHandler, healthHandler, tokenManager)
 
 	server := httpserver.New(cfg, log, router)
 

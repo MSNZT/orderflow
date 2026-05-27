@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/MSNZT/orderflow/internal/authcontext"
 	"github.com/MSNZT/orderflow/internal/httpresponse"
 	"github.com/MSNZT/orderflow/internal/users"
 	"github.com/google/uuid"
@@ -138,6 +139,38 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	if err := httpresponse.JSON(w, http.StatusOK, res); err != nil {
 		h.log.Error("failed to send login response", slog.String("op", op), slog.String("error", err.Error()))
 		httpresponse.Error(w, http.StatusInternalServerError, "internal server error")
+	}
+}
+
+func (h *Handler) Me(w http.ResponseWriter, r *http.Request) {
+	userID, ok := authcontext.UserID(r.Context())
+
+	if !ok {
+		_ = httpresponse.Error(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	user, err := h.usersService.Me(r.Context(), userID)
+	if err != nil {
+		switch {
+		case errors.Is(err, users.ErrUnauthorized):
+			_ = httpresponse.Error(w, http.StatusUnauthorized, "unauthorized")
+			return
+		default:
+			_ = httpresponse.Error(w, http.StatusInternalServerError, "internal server error")
+			return
+		}
+	}
+
+	res := userResponse{
+		ID:    user.ID.String(),
+		Email: user.Email,
+		Role:  user.Role,
+	}
+
+	if err := httpresponse.JSON(w, http.StatusOK, res); err != nil {
+		_ = httpresponse.Error(w, http.StatusInternalServerError, "internal server error")
+		return
 	}
 
 }
