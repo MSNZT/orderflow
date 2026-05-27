@@ -60,18 +60,18 @@ func (m *Manager) ParseAccessToken(accessToken string) (*Claims, error) {
 	})
 
 	if err != nil {
-		if errors.Is(err, jwt.ErrTokenExpired) {
-			return nil, fmt.Errorf("%v: %w", op, ErrTokenExpired)
-		}
 		if errors.Is(err, jwt.ErrTokenSignatureInvalid) {
-			return nil, fmt.Errorf("%v: %w", op, ErrTokenSignature)
+			return nil, fmt.Errorf("%s: %w", op, ErrTokenSignature)
+		}
+		if errors.Is(err, jwt.ErrTokenExpired) {
+			return nil, fmt.Errorf("%s: %w", op, ErrTokenExpired)
 		}
 
-		return nil, fmt.Errorf("%v: %w", op, ErrTokenInvalid)
+		return nil, fmt.Errorf("%s: %w", op, ErrTokenInvalid)
 	}
 
 	if !parsedToken.Valid {
-		return nil, fmt.Errorf("%v: %w", op, ErrTokenInvalid)
+		return nil, fmt.Errorf("%s: %w", op, ErrTokenInvalid)
 	}
 
 	return claims, nil

@@ -52,9 +52,18 @@ func extractAuthorizationToken(r *http.Request) (string, error) {
 		return "", fmt.Errorf("authorization token is missing")
 	}
 
-	token, found := strings.CutPrefix(authHeader, "Bearer ")
-	if !found {
+	scheme, token, ok := strings.Cut(authHeader, " ")
+	if !ok {
 		return "", fmt.Errorf("invalid auth header format")
+	}
+
+	if !strings.EqualFold(scheme, "Bearer") {
+		return "", fmt.Errorf("invalid authorization scheme")
+	}
+
+	token = strings.TrimSpace(token)
+	if token == "" {
+		return "", fmt.Errorf("authorization token is missing")
 	}
 
 	return token, nil

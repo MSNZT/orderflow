@@ -7,9 +7,11 @@ import (
 	"github.com/google/uuid"
 )
 
+type contextKey = string
+
 const (
-	userIDKey   = "user_id"
-	userRoleKey = "user_role"
+	userIDKey   contextKey = "user_id"
+	userRoleKey contextKey = "user_role"
 )
 
 func WithUser(ctx context.Context, userID uuid.UUID, role users.Role) context.Context {

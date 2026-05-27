@@ -27,7 +27,7 @@ func NewRouter(log *slog.Logger, authHandler *auth.Handler, healthHandler *healt
 
 		r.Group(func(r chi.Router) {
 			r.Use(httpmiddleware.Auth(tokenParser))
-			r.Get("/auth/me", authHandler.Me)
+			r.Get("/me", authHandler.Me)
 		})
 
 	})

@@ -98,10 +98,10 @@ func (s *Service) Me(ctx context.Context, userID uuid.UUID) (*User, error) {
 
 	if err != nil {
 		if errors.Is(err, ErrUserNotFound) {
-			return nil, fmt.Errorf("%v: %w", op, ErrUnauthorized)
+			return nil, fmt.Errorf("%s: %w", op, ErrUnauthorized)
 		}
 
-		return nil, fmt.Errorf("%v: %w", op, err)
+		return nil, fmt.Errorf("%s: %w", op, err)
 	}
 
 	return user, nil
