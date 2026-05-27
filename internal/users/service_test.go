@@ -121,9 +121,15 @@ func TestService_Register_InvalidEmail(t *testing.T) {
 	password := "valid-password"
 
 	_, err := service.Register(ctx, invalidEmail, password)
+
 	if err == nil {
-		t.Fatalf("expected error: %s, but got nil", ErrInvalidEmail)
+		t.Fatalf("expected error, got nil")
 	}
+
+	if !errors.Is(err, ErrInvalidEmail) {
+		t.Fatalf("expected error: %s, but got: %v", ErrInvalidEmail, err)
+	}
+
 }
 
 func TestService_Register_EmptyEmail(t *testing.T) {
@@ -176,5 +182,94 @@ func TestService_Register_DuplicateEmail(t *testing.T) {
 	_, err = service.Register(ctx, email, password)
 	if !errors.Is(err, ErrEmailAlreadyUsed) {
 		t.Errorf("expected ErrEmailAlreadyUsed, got %v", err)
+	}
+}
+
+func TestService_Login_Success(t *testing.T) {
+	ctx := context.Background()
+
+	repo := newFakeUserRepository()
+	hasher := newFakePasswordHasher()
+	service := NewService(repo, hasher)
+
+	email := uuid.NewString() + "@mail.com"
+	password := "valid-password"
+
+	_, err := service.Register(ctx, email, password)
+	if err != nil {
+		t.Fatalf("unexpected error: %s", err)
+	}
+
+	user, err := service.Login(ctx, email, password)
+	if err != nil {
+		t.Fatalf("unexpected error: %s", err)
+	}
+
+	if user.Email != email {
+		t.Fatalf("expected email: %s, got: %s", email, user.Email)
+	}
+
+	if user.Role != RoleCustomer {
+		t.Fatalf("expected role: %s, got: %s", RoleCustomer, user.Role)
+	}
+
+	if user.ID == uuid.Nil {
+		t.Fatalf("expected user id, got nil")
+	}
+
+}
+
+func TestService_Login_UserNotFound(t *testing.T) {
+	ctx := context.Background()
+
+	repo := newFakeUserRepository()
+	hasher := newFakePasswordHasher()
+	service := NewService(repo, hasher)
+
+	email := uuid.NewString() + "@mail.com"
+	password := "valid-password"
+
+	_, err := service.Login(ctx, email, password)
+	if !errors.Is(err, ErrInvalidCredentials) {
+		t.Fatalf("expected ErrInvalidCredentials, got: %v", err)
+	}
+}
+
+func TestService_Login_WrongPassword(t *testing.T) {
+	ctx := context.Background()
+
+	repo := newFakeUserRepository()
+	hasher := newFakePasswordHasher()
+	service := NewService(repo, hasher)
+
+	email := uuid.NewString() + "@mail.com"
+	password := "valid-password"
+
+	_, err := service.Register(ctx, email, password)
+	if err != nil {
+		t.Fatalf("unexpected error: %s", err)
+	}
+
+	wrongPassword := "wrong-password"
+
+	_, err = service.Login(ctx, email, wrongPassword)
+	if !errors.Is(err, ErrInvalidCredentials) {
+		t.Fatalf("expected ErrInvalidCredentials, got: %v", err)
+	}
+}
+
+func TestService_Login_InvalidEmail(t *testing.T) {
+	ctx := context.Background()
+
+	repo := newFakeUserRepository()
+	hasher := newFakePasswordHasher()
+	service := NewService(repo, hasher)
+
+	invalidEmail := "invalid-email."
+	password := "valid-password"
+
+	_, err := service.Login(ctx, invalidEmail, password)
+	if !errors.Is(err, ErrInvalidCredentials) {
+		t.Fatalf("expected ErrInvalidCredentials, got: %v", err)
 	}
 }

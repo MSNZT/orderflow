@@ -21,8 +21,9 @@ type Service struct {
 }
 
 var (
-	ErrInvalidEmail    = errors.New("invalid email")
-	ErrInvalidPassword = errors.New("invalid password")
+	ErrInvalidEmail       = errors.New("invalid email")
+	ErrInvalidPassword    = errors.New("invalid password")
+	ErrInvalidCredentials = errors.New("invalid credentials")
 )
 
 func NewService(repo UserRepository, hasher PasswordHasher) *Service {
@@ -35,13 +36,13 @@ func NewService(repo UserRepository, hasher PasswordHasher) *Service {
 func (s *Service) Register(ctx context.Context, email, password string) (*User, error) {
 	const op = "users.service.Register"
 
-	email = strings.TrimSpace(strings.ToLower(email))
-
-	if email == "" || !strings.Contains(email, "@") {
+	email = normalizeEmail(email)
+	if !isEmailValid(email) {
 		return nil, fmt.Errorf("%s: %w", op, ErrInvalidEmail)
 	}
 
-	if len(password) < 8 {
+	password = normalizePassword(password)
+	if !isPasswordValid(password) {
 		return nil, fmt.Errorf("%s: %w", op, ErrInvalidPassword)
 	}
 
@@ -62,4 +63,45 @@ func (s *Service) Register(ctx context.Context, email, password string) (*User, 
 	}
 
 	return &user, nil
+}
+
+func (s *Service) Login(ctx context.Context, email string, password string) (*User, error) {
+	const op = "users.service.Login"
+
+	email = normalizeEmail(email)
+	password = normalizePassword(password)
+
+	if !isEmailValid(email) || !isPasswordValid(password) {
+		return nil, fmt.Errorf("%s: %w", op, ErrInvalidCredentials)
+	}
+
+	user, err := s.repo.GetByEmail(ctx, email)
+	if err != nil {
+		if errors.Is(err, ErrUserNotFound) {
+			return nil, fmt.Errorf("%s: %w", op, ErrInvalidCredentials)
+		}
+		return nil, fmt.Errorf("%s: %w", op, err)
+	}
+
+	if err := s.hasher.Compare(user.PasswordHash, password); err != nil {
+		return nil, fmt.Errorf("%s: %w", op, ErrInvalidCredentials)
+	}
+
+	return user, nil
+}
+
+func normalizeEmail(email string) string {
+	return strings.TrimSpace(strings.ToLower(email))
+}
+
+func normalizePassword(password string) string {
+	return strings.TrimSpace(password)
+}
+
+func isEmailValid(email string) bool {
+	return email != "" && strings.Contains(email, "@")
+}
+
+func isPasswordValid(password string) bool {
+	return len(password) >= 8
 }
