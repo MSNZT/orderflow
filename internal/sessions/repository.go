@@ -81,7 +81,7 @@ func (r *Repository) RotateRefreshToken(ctx context.Context, id uuid.UUID, token
 			  SET refresh_token_hash = $2,
 			  	  expires_at = $3,
 			      last_used_at = NOW(),
-			      updated_at = NOW(),
+			      updated_at = NOW()
 			  WHERE id = $1`
 
 	tag, err := r.pool.Exec(ctx, query, id, tokenHash, expiresAt)
