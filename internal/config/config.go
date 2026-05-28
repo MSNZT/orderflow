@@ -33,6 +33,7 @@ type PostgresConfig struct {
 type JWTConfig struct {
 	Secret    string        `yaml:"secret" env:"JWT_SECRET"`
 	AccessTTL time.Duration `yaml:"access_ttl" env:"JWT_ACCESS_TTL"`
+	RefeshTTL time.Duration `yaml:"refresh_ttl" env:"JWT_REFRESH_TTL"`
 }
 
 func Load() (*Config, error) {
@@ -109,6 +110,10 @@ func (c *Config) validate() error {
 
 	if c.JWT.AccessTTL <= 0 {
 		return fmt.Errorf("jwt access ttl must be greater than 0")
+	}
+
+	if c.JWT.RefeshTTL <= 0 {
+		return fmt.Errorf("jwt refresh ttl must be greater than 0")
 	}
 
 	return nil
