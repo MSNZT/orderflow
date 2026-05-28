@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -53,14 +54,16 @@ func (r *Repository) FindByRefreshTokenHash(ctx context.Context, tokenHash strin
 		updated_at,
 		last_used_at,
 		expires_at,
-		revoked_at,
+		revoked_at
 	FROM user_sessions 
-	WHERE refresh_token_hash = $1
-	);`
+	WHERE refresh_token_hash = $1;`
 
-	var session *Session
+	var s Session
 
-	err := r.pool.QueryRow(ctx, query, tokenHash).Scan(&session)
+	err := r.pool.QueryRow(ctx, query, tokenHash).Scan(
+		&s.ID, &s.UserID, &s.RefreshTokenHash, &s.UserAgent, &s.IPAddress,
+		&s.CreatedAt, &s.UpdatedAt, &s.LastUsedAt, &s.ExpiresAt, &s.RevokedAt)
+
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, fmt.Errorf("%s: %w", op, ErrSessionNotFound)
@@ -68,15 +71,20 @@ func (r *Repository) FindByRefreshTokenHash(ctx context.Context, tokenHash strin
 		return nil, fmt.Errorf("%s: %w", op, err)
 	}
 
-	return session, nil
+	return &s, nil
 }
 
-func (r *Repository) UpdateHash(ctx context.Context, id uuid.UUID, tokenHash string) error {
-	const op = "sessions.repository.UpdateSession"
+func (r *Repository) RotateRefreshToken(ctx context.Context, id uuid.UUID, tokenHash string, experis_at time.Time) error {
+	const op = "sessions.repository.RotateRefreshToken"
 
-	query := `UPDATE user_sessions SET refresh_token_hash = $2 WHERE id = $1`
+	query := `UPDATE user_sessions 
+			  SET refresh_token_hash = $2 
+			  SET expires_at = $3
+			  SET last_used_at = NOW()
+			  SET updated_at = NOW()
+			  WHERE id = $1`
 
-	tag, err := r.pool.Exec(ctx, query, id, tokenHash)
+	tag, err := r.pool.Exec(ctx, query, id, tokenHash, experis_at)
 	if err != nil {
 		return fmt.Errorf("%s: %w", op, err)
 	}
@@ -93,6 +101,7 @@ func (r *Repository) Revoke(ctx context.Context, tokenHash string) error {
 
 	query := `UPDATE user_sessions 
 			  SET revoked_at = NOW() 
+			  SET updated_at = NOW() 
 			  WHERE refresh_token_hash = $1 AND revoked_at IS NULL;`
 
 	tag, err := r.pool.Exec(ctx, query, tokenHash)
@@ -101,7 +110,7 @@ func (r *Repository) Revoke(ctx context.Context, tokenHash string) error {
 	}
 
 	if tag.RowsAffected() == 0 {
-		return fmt.Errorf("%s: %w", op, ErrSessionNotFound)
+		return fmt.Errorf("%s: %w", op, ErrSessionRevoked)
 	}
 
 	return nil
