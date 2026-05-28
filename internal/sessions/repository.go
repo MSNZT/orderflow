@@ -74,17 +74,17 @@ func (r *Repository) FindByRefreshTokenHash(ctx context.Context, tokenHash strin
 	return &s, nil
 }
 
-func (r *Repository) RotateRefreshToken(ctx context.Context, id uuid.UUID, tokenHash string, experis_at time.Time) error {
+func (r *Repository) RotateRefreshToken(ctx context.Context, id uuid.UUID, tokenHash string, expiresAt time.Time) error {
 	const op = "sessions.repository.RotateRefreshToken"
 
 	query := `UPDATE user_sessions 
-			  SET refresh_token_hash = $2 
-			  SET expires_at = $3
-			  SET last_used_at = NOW()
-			  SET updated_at = NOW()
+			  SET refresh_token_hash = $2,
+			  	  expires_at = $3,
+			      last_used_at = NOW(),
+			      updated_at = NOW(),
 			  WHERE id = $1`
 
-	tag, err := r.pool.Exec(ctx, query, id, tokenHash, experis_at)
+	tag, err := r.pool.Exec(ctx, query, id, tokenHash, expiresAt)
 	if err != nil {
 		return fmt.Errorf("%s: %w", op, err)
 	}
@@ -100,9 +100,12 @@ func (r *Repository) Revoke(ctx context.Context, tokenHash string) error {
 	const op = "sessions.repository.Revoke"
 
 	query := `UPDATE user_sessions 
-			  SET revoked_at = NOW() 
-			  SET updated_at = NOW() 
-			  WHERE refresh_token_hash = $1 AND revoked_at IS NULL;`
+			  SET revoked_at = COALESCE(revoked_at, NOW()), 
+			      updated_at = CASE
+				  	 WHEN revoked_at IS NULL THEN NOW()
+					 ELSE updated_at
+				  END 
+			  WHERE refresh_token_hash = $1;`
 
 	tag, err := r.pool.Exec(ctx, query, tokenHash)
 	if err != nil {
@@ -110,7 +113,7 @@ func (r *Repository) Revoke(ctx context.Context, tokenHash string) error {
 	}
 
 	if tag.RowsAffected() == 0 {
-		return fmt.Errorf("%s: %w", op, ErrSessionRevoked)
+		return fmt.Errorf("%s: %w", op, ErrSessionNotFound)
 	}
 
 	return nil
