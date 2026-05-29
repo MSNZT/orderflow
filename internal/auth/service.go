@@ -12,6 +12,11 @@ import (
 	"github.com/google/uuid"
 )
 
+type TokenManager interface {
+	GenerateAccessToken(userID uuid.UUID, role users.Role) (string, error)
+	AccessTTL() time.Duration
+}
+
 type Service struct {
 	usersService       *users.Service
 	tokenManager       TokenManager
@@ -20,9 +25,10 @@ type Service struct {
 }
 
 type LoginResult struct {
-	User         *users.User
-	AccessToken  string
-	RefreshToken string
+	User           *users.User
+	AccessToken    string
+	RefreshToken   string
+	AccessTokenTTL time.Duration
 }
 
 func NewService(usersService *users.Service, tokenManager TokenManager, sessionsRepository *sessions.Repository, refreshTTL time.Duration) *Service {
@@ -68,8 +74,9 @@ func (s *Service) Login(ctx context.Context, email string, password string, user
 	}
 
 	return &LoginResult{
-		User:         user,
-		AccessToken:  accessToken,
-		RefreshToken: refreshToken,
+		User:           user,
+		AccessToken:    accessToken,
+		RefreshToken:   refreshToken,
+		AccessTokenTTL: s.tokenManager.AccessTTL(),
 	}, nil
 }

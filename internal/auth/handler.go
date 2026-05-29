@@ -3,14 +3,13 @@ package auth
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
-	"time"
 
 	"github.com/MSNZT/orderflow/internal/authcontext"
 	"github.com/MSNZT/orderflow/internal/httpresponse"
 	"github.com/MSNZT/orderflow/internal/users"
-	"github.com/google/uuid"
 )
 
 type registerRequest struct {
@@ -31,7 +30,7 @@ type loginRequest struct {
 
 type loginResponse struct {
 	AccessToken string       `json:"access_token"`
-	ExpiresIn   int64        `json:"expires_in"`
+	ExpiresIn   int          `json:"expires_in"`
 	User        userResponse `json:"user"`
 }
 
@@ -44,16 +43,11 @@ type userResponse struct {
 type Handler struct {
 	log          *slog.Logger
 	usersService *users.Service
-	tokenManager TokenManager
+	authService  *Service
 }
 
-type TokenManager interface {
-	GenerateAccessToken(userID uuid.UUID, role users.Role) (string, error)
-	AccessTTL() time.Duration
-}
-
-func NewHandler(log *slog.Logger, usersService *users.Service, tokenManager TokenManager) *Handler {
-	return &Handler{log: log, usersService: usersService, tokenManager: tokenManager}
+func NewHandler(log *slog.Logger, usersService *users.Service, authService *Service) *Handler {
+	return &Handler{log: log, usersService: usersService, authService: authService}
 }
 
 func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
@@ -106,7 +100,9 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := h.usersService.Login(r.Context(), req.Email, req.Password)
+	userAgent := r.UserAgent()
+
+	loginResult, err := h.authService.Login(r.Context(), req.Email, req.Password, userAgent, nil)
 	if err != nil {
 		switch {
 		case errors.Is(err, users.ErrInvalidCredentials):
@@ -119,20 +115,15 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	token, err := h.tokenManager.GenerateAccessToken(user.ID, user.Role)
-	if err != nil {
-		h.log.Error("failed to generate access token", slog.String("op", op), slog.String("error", err.Error()))
-		_ = httpresponse.Error(w, http.StatusInternalServerError, "internal server error")
-		return
-	}
+	fmt.Println(loginResult.RefreshToken)
 
 	res := loginResponse{
-		AccessToken: token,
-		ExpiresIn:   int64(h.tokenManager.AccessTTL().Seconds()),
+		AccessToken: loginResult.AccessToken,
+		ExpiresIn:   int(loginResult.AccessTokenTTL.Seconds()),
 		User: userResponse{
-			ID:    user.ID.String(),
-			Email: user.Email,
-			Role:  user.Role,
+			ID:    loginResult.User.ID.String(),
+			Email: loginResult.User.Email,
+			Role:  loginResult.User.Role,
 		},
 	}
 
