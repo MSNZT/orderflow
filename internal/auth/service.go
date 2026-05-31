@@ -25,10 +25,11 @@ type Service struct {
 }
 
 type LoginResult struct {
-	User           *users.User
-	AccessToken    string
-	RefreshToken   string
-	AccessTokenTTL time.Duration
+	User            *users.User
+	AccessToken     string
+	RefreshToken    string
+	AccessTokenTTL  time.Duration
+	RefreshTokenTLL time.Duration
 }
 
 func NewService(usersService *users.Service, tokenManager TokenManager, sessionsRepository *sessions.Repository, refreshTTL time.Duration) *Service {
@@ -74,9 +75,10 @@ func (s *Service) Login(ctx context.Context, email string, password string, user
 	}
 
 	return &LoginResult{
-		User:           user,
-		AccessToken:    accessToken,
-		RefreshToken:   refreshToken,
-		AccessTokenTTL: s.tokenManager.AccessTTL(),
+		User:            user,
+		AccessToken:     accessToken,
+		RefreshToken:    refreshToken,
+		AccessTokenTTL:  s.tokenManager.AccessTTL(),
+		RefreshTokenTLL: s.refreshTTL,
 	}, nil
 }

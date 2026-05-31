@@ -3,7 +3,6 @@ package auth
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"log/slog"
 	"net/http"
 
@@ -115,8 +114,6 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	fmt.Println(loginResult.RefreshToken)
-
 	res := loginResponse{
 		AccessToken: loginResult.AccessToken,
 		ExpiresIn:   int(loginResult.AccessTokenTTL.Seconds()),
@@ -126,6 +123,8 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 			Role:  loginResult.User.Role,
 		},
 	}
+
+	SetRefreshToken(w, loginResult.RefreshToken, loginResult.RefreshTokenTLL)
 
 	if err := httpresponse.JSON(w, http.StatusOK, res); err != nil {
 		h.log.Error("failed to send login response", slog.String("op", op), slog.String("error", err.Error()))

@@ -18,7 +18,7 @@ func GenerateRefreshToken() (string, error) {
 		return "", fmt.Errorf("failed to generate refresh token: %w", err)
 	}
 
-	return base64.RawURLEncoding.EncodeToString(b), err
+	return base64.RawURLEncoding.EncodeToString(b), nil
 }
 
 func HashRefreshToken(token string) string {
