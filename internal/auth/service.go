@@ -29,7 +29,14 @@ type LoginResult struct {
 	AccessToken     string
 	RefreshToken    string
 	AccessTokenTTL  time.Duration
-	RefreshTokenTLL time.Duration
+	RefreshTokenTTL time.Duration
+}
+
+type RefreshResult struct {
+	AccessToken     string
+	RefreshToken    string
+	AccessTokenTTL  time.Duration
+	RefreshTokenTTL time.Duration
 }
 
 func NewService(usersService *users.Service, tokenManager TokenManager, sessionsRepository *sessions.Repository, refreshTTL time.Duration) *Service {
@@ -79,6 +86,54 @@ func (s *Service) Login(ctx context.Context, email string, password string, user
 		AccessToken:     accessToken,
 		RefreshToken:    refreshToken,
 		AccessTokenTTL:  s.tokenManager.AccessTTL(),
-		RefreshTokenTLL: s.refreshTTL,
+		RefreshTokenTTL: s.refreshTTL,
+	}, nil
+}
+
+func (s *Service) Refresh(ctx context.Context, refreshToken string) (*RefreshResult, error) {
+	const op = "auth.service.Refresh"
+	hashRefreshToken := token.HashRefreshToken(refreshToken)
+	session, err := s.sessionsRepository.FindByRefreshTokenHash(ctx, hashRefreshToken)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", op, err)
+	}
+
+	if session.RevokedAt != nil {
+		return nil, fmt.Errorf("%s: %w", op, sessions.ErrSessionRevoked)
+	}
+
+	now := time.Now()
+
+	if !session.ExpiresAt.After(now) {
+		return nil, fmt.Errorf("%s: %w", op, sessions.ErrSessionExpired)
+	}
+
+	user, err := s.usersService.Me(ctx, session.UserID)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", op, err)
+	}
+
+	accessToken, err := s.tokenManager.GenerateAccessToken(user.ID, user.Role)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", op, err)
+	}
+
+	newRefreshToken, err := token.GenerateRefreshToken()
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", op, err)
+	}
+
+	hashRefreshToken = token.HashRefreshToken(newRefreshToken)
+
+	err = s.sessionsRepository.RotateRefreshToken(ctx, session.ID, hashRefreshToken, now.Add(s.refreshTTL))
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", op, err)
+	}
+
+	return &RefreshResult{
+		AccessToken:     accessToken,
+		RefreshToken:    newRefreshToken,
+		AccessTokenTTL:  s.tokenManager.AccessTTL(),
+		RefreshTokenTTL: s.refreshTTL,
 	}, nil
 }

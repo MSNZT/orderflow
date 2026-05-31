@@ -124,7 +124,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 
-	SetRefreshToken(w, loginResult.RefreshToken, loginResult.RefreshTokenTLL)
+	SetRefreshToken(w, loginResult.RefreshToken, loginResult.RefreshTokenTTL)
 
 	if err := httpresponse.JSON(w, http.StatusOK, res); err != nil {
 		h.log.Error("failed to send login response", slog.String("op", op), slog.String("error", err.Error()))
