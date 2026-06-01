@@ -24,6 +24,7 @@ func NewRouter(log *slog.Logger, authHandler *auth.Handler, healthHandler *healt
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Post("/auth/register", authHandler.Register)
 		r.Post("/auth/login", authHandler.Login)
+		r.Post("/auth/refresh", authHandler.Refresh)
 
 		r.Group(func(r chi.Router) {
 			r.Use(httpmiddleware.Auth(tokenParser))

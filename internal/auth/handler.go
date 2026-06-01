@@ -8,6 +8,7 @@ import (
 
 	"github.com/MSNZT/orderflow/internal/authcontext"
 	"github.com/MSNZT/orderflow/internal/httpresponse"
+	"github.com/MSNZT/orderflow/internal/sessions"
 	"github.com/MSNZT/orderflow/internal/users"
 )
 
@@ -31,6 +32,11 @@ type loginResponse struct {
 	AccessToken string       `json:"access_token"`
 	ExpiresIn   int          `json:"expires_in"`
 	User        userResponse `json:"user"`
+}
+
+type refreshResponse struct {
+	AccessToken string `json:"access_token"`
+	ExpiresIn   int    `json:"expires_in"`
 }
 
 type userResponse struct {
@@ -167,4 +173,52 @@ func (h *Handler) Me(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+}
+
+func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
+	const op = "auth.handler.Refresh"
+
+	cookie, err := r.Cookie("refresh_token")
+	if err != nil {
+		if errors.Is(err, http.ErrNoCookie) {
+			_ = httpresponse.Error(w, http.StatusUnauthorized, "unauthorized")
+			return
+		}
+
+		h.log.Error("failed to get refresh token from cookie", slog.String("op", op), slog.String("error", err.Error()))
+		_ = httpresponse.Error(w, http.StatusInternalServerError, "internal server error")
+		return
+	}
+
+	if cookie.Value == "" {
+		_ = httpresponse.Error(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	refreshResult, err := h.authService.Refresh(r.Context(), cookie.Value)
+	if err != nil {
+		switch {
+		case errors.Is(err, sessions.ErrSessionExpired),
+			errors.Is(err, sessions.ErrSessionNotFound),
+			errors.Is(err, sessions.ErrSessionRevoked),
+			errors.Is(err, users.ErrUserNotFound):
+			_ = httpresponse.Error(w, http.StatusUnauthorized, "unauthorized")
+			return
+		default:
+			h.log.Error("failed to update refresh session", slog.String("op", op), slog.String("error", err.Error()))
+			_ = httpresponse.Error(w, http.StatusInternalServerError, "internal server error")
+			return
+		}
+	}
+
+	SetRefreshToken(w, refreshResult.RefreshToken, refreshResult.RefreshTokenTTL)
+	res := refreshResponse{
+		AccessToken: refreshResult.AccessToken,
+		ExpiresIn:   int(refreshResult.AccessTokenTTL.Seconds()),
+	}
+
+	if err := httpresponse.JSON(w, http.StatusOK, res); err != nil {
+		h.log.Error("failed to send refresh response", slog.String("op", op), slog.String("error", err.Error()))
+		_ = httpresponse.Error(w, http.StatusInternalServerError, "internal server error")
+	}
 }

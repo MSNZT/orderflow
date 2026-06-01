@@ -105,7 +105,18 @@ func (s *Service) Me(ctx context.Context, userID uuid.UUID) (*User, error) {
 	}
 
 	return user, nil
+}
 
+func (s *Service) GetByID(ctx context.Context, userID uuid.UUID) (*User, error) {
+	const op = "users.service.GetByID"
+
+	user, err := s.repo.GetByID(ctx, userID)
+
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", op, err)
+	}
+
+	return user, nil
 }
 
 func normalizeEmail(email string) string {

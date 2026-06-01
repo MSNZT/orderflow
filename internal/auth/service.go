@@ -24,7 +24,7 @@ type Service struct {
 	refreshTTL         time.Duration
 }
 
-type LoginResult struct {
+type loginResult struct {
 	User            *users.User
 	AccessToken     string
 	RefreshToken    string
@@ -32,7 +32,7 @@ type LoginResult struct {
 	RefreshTokenTTL time.Duration
 }
 
-type RefreshResult struct {
+type refreshResult struct {
 	AccessToken     string
 	RefreshToken    string
 	AccessTokenTTL  time.Duration
@@ -48,7 +48,7 @@ func NewService(usersService *users.Service, tokenManager TokenManager, sessions
 	}
 }
 
-func (s *Service) Login(ctx context.Context, email string, password string, userAgent string, ipAddress *net.IP) (*LoginResult, error) {
+func (s *Service) Login(ctx context.Context, email string, password string, userAgent string, ipAddress *net.IP) (*loginResult, error) {
 	const op = "auth.service.Login"
 
 	user, err := s.usersService.Login(ctx, email, password)
@@ -81,7 +81,7 @@ func (s *Service) Login(ctx context.Context, email string, password string, user
 		return nil, fmt.Errorf("%s: %w", op, err)
 	}
 
-	return &LoginResult{
+	return &loginResult{
 		User:            user,
 		AccessToken:     accessToken,
 		RefreshToken:    refreshToken,
@@ -90,7 +90,7 @@ func (s *Service) Login(ctx context.Context, email string, password string, user
 	}, nil
 }
 
-func (s *Service) Refresh(ctx context.Context, refreshToken string) (*RefreshResult, error) {
+func (s *Service) Refresh(ctx context.Context, refreshToken string) (*refreshResult, error) {
 	const op = "auth.service.Refresh"
 	hashRefreshToken := token.HashRefreshToken(refreshToken)
 	session, err := s.sessionsRepository.FindByRefreshTokenHash(ctx, hashRefreshToken)
@@ -108,7 +108,7 @@ func (s *Service) Refresh(ctx context.Context, refreshToken string) (*RefreshRes
 		return nil, fmt.Errorf("%s: %w", op, sessions.ErrSessionExpired)
 	}
 
-	user, err := s.usersService.Me(ctx, session.UserID)
+	user, err := s.usersService.GetByID(ctx, session.UserID)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", op, err)
 	}
@@ -130,7 +130,7 @@ func (s *Service) Refresh(ctx context.Context, refreshToken string) (*RefreshRes
 		return nil, fmt.Errorf("%s: %w", op, err)
 	}
 
-	return &RefreshResult{
+	return &refreshResult{
 		AccessToken:     accessToken,
 		RefreshToken:    newRefreshToken,
 		AccessTokenTTL:  s.tokenManager.AccessTTL(),
