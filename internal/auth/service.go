@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"time"
@@ -136,4 +137,19 @@ func (s *Service) Refresh(ctx context.Context, refreshToken string) (*refreshRes
 		AccessTokenTTL:  s.tokenManager.AccessTTL(),
 		RefreshTokenTTL: s.refreshTTL,
 	}, nil
+}
+
+func (s *Service) Logout(ctx context.Context, refreshToken string) error {
+	const op = "auth.service.Logout"
+	tokenHash := token.HashRefreshToken(refreshToken)
+
+	if err := s.sessionsRepository.Revoke(ctx, tokenHash); err != nil {
+		if errors.Is(err, sessions.ErrSessionNotFound) {
+			return nil
+		}
+
+		return fmt.Errorf("%s: %w", op, err)
+	}
+
+	return nil
 }

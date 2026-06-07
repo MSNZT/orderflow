@@ -130,7 +130,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 
-	SetRefreshToken(w, loginResult.RefreshToken, loginResult.RefreshTokenTTL)
+	setRefreshToken(w, loginResult.RefreshToken, loginResult.RefreshTokenTTL)
 
 	if err := httpresponse.JSON(w, http.StatusOK, res); err != nil {
 		h.log.Error("failed to send login response", slog.String("op", op), slog.String("error", err.Error()))
@@ -202,6 +202,7 @@ func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 			errors.Is(err, sessions.ErrSessionNotFound),
 			errors.Is(err, sessions.ErrSessionRevoked),
 			errors.Is(err, users.ErrUserNotFound):
+			clearRefreshCookie(w)
 			_ = httpresponse.Error(w, http.StatusUnauthorized, "unauthorized")
 			return
 		default:
@@ -211,7 +212,7 @@ func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	SetRefreshToken(w, refreshResult.RefreshToken, refreshResult.RefreshTokenTTL)
+	setRefreshToken(w, refreshResult.RefreshToken, refreshResult.RefreshTokenTTL)
 	res := refreshResponse{
 		AccessToken: refreshResult.AccessToken,
 		ExpiresIn:   int(refreshResult.AccessTokenTTL.Seconds()),
@@ -221,4 +222,31 @@ func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 		h.log.Error("failed to send refresh response", slog.String("op", op), slog.String("error", err.Error()))
 		_ = httpresponse.Error(w, http.StatusInternalServerError, "internal server error")
 	}
+}
+
+func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
+	const op = "auth.handler.Logout"
+	cookie, err := r.Cookie(refreshCookieName)
+
+	if err != nil || cookie.Value == "" {
+		clearRefreshCookie(w)
+		httpresponse.NoContent(w)
+		return
+	}
+
+	if err := h.authService.Logout(r.Context(), cookie.Value); err != nil {
+		clearRefreshCookie(w)
+
+		if errors.Is(err, sessions.ErrSessionNotFound) {
+			httpresponse.NoContent(w)
+			return
+		}
+
+		h.log.Error("failed to logout", slog.String("op", op), slog.String("error", err.Error()))
+		_ = httpresponse.Error(w, http.StatusInternalServerError, "internal server error")
+		return
+	}
+
+	clearRefreshCookie(w)
+	httpresponse.NoContent(w)
 }

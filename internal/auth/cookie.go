@@ -5,11 +5,14 @@ import (
 	"time"
 )
 
-func SetRefreshToken(w http.ResponseWriter, refreshToken string, refreshTokenTTL time.Duration) {
+const refreshCookieName = "refresh_token"
+const refreshCookiePath = "/api/v1/auth"
+
+func setRefreshToken(w http.ResponseWriter, refreshToken string, refreshTokenTTL time.Duration) {
 	http.SetCookie(w, &http.Cookie{
-		Name:     "refresh_token",
+		Name:     refreshCookieName,
 		Value:    refreshToken,
-		Path:     "/api/v1/auth",
+		Path:     refreshCookiePath,
 		HttpOnly: true,
 		Secure:   false,
 		SameSite: http.SameSiteLaxMode,
@@ -18,11 +21,11 @@ func SetRefreshToken(w http.ResponseWriter, refreshToken string, refreshTokenTTL
 	})
 }
 
-func ClearRefreshCookie(w http.ResponseWriter) {
+func clearRefreshCookie(w http.ResponseWriter) {
 	http.SetCookie(w, &http.Cookie{
-		Name:     "refresh_token",
+		Name:     refreshCookieName,
 		Value:    "",
-		Path:     "/api/v1/auth",
+		Path:     refreshCookiePath,
 		HttpOnly: true,
 		Secure:   false,
 		SameSite: http.SameSiteLaxMode,
