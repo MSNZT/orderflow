@@ -14,6 +14,7 @@ import (
 	"github.com/MSNZT/orderflow/internal/logger"
 	"github.com/MSNZT/orderflow/internal/platform/postgres"
 	"github.com/MSNZT/orderflow/internal/router"
+	"github.com/MSNZT/orderflow/internal/sessions"
 	"github.com/MSNZT/orderflow/internal/token"
 	"github.com/MSNZT/orderflow/internal/users"
 )
@@ -43,7 +44,11 @@ func main() {
 	hasher := users.NewBcryptHasher(cost)
 	usersService := users.NewService(usersRepository, hasher)
 	tokenManager := token.NewManager(cfg.JWT.Secret, cfg.JWT.AccessTTL)
-	authHandler := auth.NewHandler(log, usersService, tokenManager)
+
+	sessionsRepository := sessions.NewRepository(dbPool)
+	authService := auth.NewService(usersService, tokenManager, sessionsRepository, cfg.JWT.RefreshTTL)
+
+	authHandler := auth.NewHandler(log, usersService, authService)
 
 	router := router.NewRouter(log, authHandler, healthHandler, tokenManager)
 

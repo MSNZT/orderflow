@@ -5,12 +5,11 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
-	"time"
 
 	"github.com/MSNZT/orderflow/internal/authcontext"
 	"github.com/MSNZT/orderflow/internal/httpresponse"
+	"github.com/MSNZT/orderflow/internal/sessions"
 	"github.com/MSNZT/orderflow/internal/users"
-	"github.com/google/uuid"
 )
 
 type registerRequest struct {
@@ -31,8 +30,13 @@ type loginRequest struct {
 
 type loginResponse struct {
 	AccessToken string       `json:"access_token"`
-	ExpiresIn   int64        `json:"expires_in"`
+	ExpiresIn   int          `json:"expires_in"`
 	User        userResponse `json:"user"`
+}
+
+type refreshResponse struct {
+	AccessToken string `json:"access_token"`
+	ExpiresIn   int    `json:"expires_in"`
 }
 
 type userResponse struct {
@@ -44,16 +48,11 @@ type userResponse struct {
 type Handler struct {
 	log          *slog.Logger
 	usersService *users.Service
-	tokenManager TokenManager
+	authService  *Service
 }
 
-type TokenManager interface {
-	GenerateAccessToken(userID uuid.UUID, role users.Role) (string, error)
-	AccessTTL() time.Duration
-}
-
-func NewHandler(log *slog.Logger, usersService *users.Service, tokenManager TokenManager) *Handler {
-	return &Handler{log: log, usersService: usersService, tokenManager: tokenManager}
+func NewHandler(log *slog.Logger, usersService *users.Service, authService *Service) *Handler {
+	return &Handler{log: log, usersService: usersService, authService: authService}
 }
 
 func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
@@ -106,7 +105,9 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := h.usersService.Login(r.Context(), req.Email, req.Password)
+	userAgent := r.UserAgent()
+
+	loginResult, err := h.authService.Login(r.Context(), req.Email, req.Password, userAgent, nil)
 	if err != nil {
 		switch {
 		case errors.Is(err, users.ErrInvalidCredentials):
@@ -119,22 +120,17 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	token, err := h.tokenManager.GenerateAccessToken(user.ID, user.Role)
-	if err != nil {
-		h.log.Error("failed to generate access token", slog.String("op", op), slog.String("error", err.Error()))
-		_ = httpresponse.Error(w, http.StatusInternalServerError, "internal server error")
-		return
-	}
-
 	res := loginResponse{
-		AccessToken: token,
-		ExpiresIn:   int64(h.tokenManager.AccessTTL().Seconds()),
+		AccessToken: loginResult.AccessToken,
+		ExpiresIn:   int(loginResult.AccessTokenTTL.Seconds()),
 		User: userResponse{
-			ID:    user.ID.String(),
-			Email: user.Email,
-			Role:  user.Role,
+			ID:    loginResult.User.ID.String(),
+			Email: loginResult.User.Email,
+			Role:  loginResult.User.Role,
 		},
 	}
+
+	setRefreshToken(w, loginResult.RefreshToken, loginResult.RefreshTokenTTL)
 
 	if err := httpresponse.JSON(w, http.StatusOK, res); err != nil {
 		h.log.Error("failed to send login response", slog.String("op", op), slog.String("error", err.Error()))
@@ -177,4 +173,75 @@ func (h *Handler) Me(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+}
+
+func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
+	const op = "auth.handler.Refresh"
+
+	cookie, err := r.Cookie("refresh_token")
+	if err != nil {
+		if errors.Is(err, http.ErrNoCookie) {
+			_ = httpresponse.Error(w, http.StatusUnauthorized, "unauthorized")
+			return
+		}
+
+		h.log.Error("failed to get refresh token from cookie", slog.String("op", op), slog.String("error", err.Error()))
+		_ = httpresponse.Error(w, http.StatusInternalServerError, "internal server error")
+		return
+	}
+
+	if cookie.Value == "" {
+		_ = httpresponse.Error(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	refreshResult, err := h.authService.Refresh(r.Context(), cookie.Value)
+	if err != nil {
+		switch {
+		case errors.Is(err, sessions.ErrSessionExpired),
+			errors.Is(err, sessions.ErrSessionNotFound),
+			errors.Is(err, sessions.ErrSessionRevoked),
+			errors.Is(err, users.ErrUserNotFound):
+			clearRefreshCookie(w)
+			_ = httpresponse.Error(w, http.StatusUnauthorized, "unauthorized")
+			return
+		default:
+			h.log.Error("failed to update refresh session", slog.String("op", op), slog.String("error", err.Error()))
+			_ = httpresponse.Error(w, http.StatusInternalServerError, "internal server error")
+			return
+		}
+	}
+
+	setRefreshToken(w, refreshResult.RefreshToken, refreshResult.RefreshTokenTTL)
+	res := refreshResponse{
+		AccessToken: refreshResult.AccessToken,
+		ExpiresIn:   int(refreshResult.AccessTokenTTL.Seconds()),
+	}
+
+	if err := httpresponse.JSON(w, http.StatusOK, res); err != nil {
+		h.log.Error("failed to send refresh response", slog.String("op", op), slog.String("error", err.Error()))
+		_ = httpresponse.Error(w, http.StatusInternalServerError, "internal server error")
+	}
+}
+
+func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
+	const op = "auth.handler.Logout"
+	cookie, err := r.Cookie(refreshCookieName)
+
+	if err != nil || cookie.Value == "" {
+		clearRefreshCookie(w)
+		httpresponse.NoContent(w)
+		return
+	}
+
+	if err := h.authService.Logout(r.Context(), cookie.Value); err != nil {
+		clearRefreshCookie(w)
+
+		h.log.Error("failed to logout", slog.String("op", op), slog.String("error", err.Error()))
+		_ = httpresponse.Error(w, http.StatusInternalServerError, "internal server error")
+		return
+	}
+
+	clearRefreshCookie(w)
+	httpresponse.NoContent(w)
 }
