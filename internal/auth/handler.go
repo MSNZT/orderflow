@@ -237,11 +237,6 @@ func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 	if err := h.authService.Logout(r.Context(), cookie.Value); err != nil {
 		clearRefreshCookie(w)
 
-		if errors.Is(err, sessions.ErrSessionNotFound) {
-			httpresponse.NoContent(w)
-			return
-		}
-
 		h.log.Error("failed to logout", slog.String("op", op), slog.String("error", err.Error()))
 		_ = httpresponse.Error(w, http.StatusInternalServerError, "internal server error")
 		return
