@@ -69,8 +69,13 @@ func (s *Service) Login(ctx context.Context, email string, password string, user
 
 	refreshTokenHash := token.HashRefreshToken(refreshToken)
 
+	id, err := uuid.NewV7()
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", op, err)
+	}
+
 	err = s.sessionsRepository.Create(ctx, sessions.Session{
-		ID:               uuid.New(),
+		ID:               id,
 		UserID:           user.ID,
 		RefreshTokenHash: refreshTokenHash,
 		UserAgent:        &userAgent,
