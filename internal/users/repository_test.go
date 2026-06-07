@@ -16,8 +16,14 @@ func TestRepository_CreateAndGetByEmail(t *testing.T) {
 	pool := newTestPool(t)
 
 	repo := NewRepository(pool)
+
+	id, err := uuid.NewV7()
+	if err != nil {
+		t.Fatalf("failed to generate uuid: %v", err)
+	}
+
 	user := User{
-		ID:           uuid.New(),
+		ID:           id,
 		Email:        "test-" + uuid.NewString() + "@mail.com",
 		PasswordHash: "hash",
 		Role:         RoleCustomer,
@@ -58,8 +64,14 @@ func TestRepository_CreateAndGetByID(t *testing.T) {
 	pool := newTestPool(t)
 
 	repo := NewRepository(pool)
+
+	id, err := uuid.NewV7()
+	if err != nil {
+		t.Fatalf("failed to generate uuid: %v", err)
+	}
+
 	user := User{
-		ID:           uuid.New(),
+		ID:           id,
 		Email:        "test-" + uuid.NewString() + "@mail.com",
 		PasswordHash: "hash",
 		Role:         RoleCustomer,
@@ -117,9 +129,12 @@ func TestRepository_GetByID_NotFound(t *testing.T) {
 	pool := newTestPool(t)
 	repo := NewRepository(pool)
 
-	id := uuid.New()
+	id, err := uuid.NewV7()
+	if err != nil {
+		t.Fatalf("failed to generate uuid: %v", err)
+	}
 
-	_, err := repo.GetByID(ctx, id)
+	_, err = repo.GetByID(ctx, id)
 	if err == nil {
 		t.Fatalf("expected error, got nil")
 	}
@@ -136,15 +151,25 @@ func TestRepository_Create_DuplicateEmail(t *testing.T) {
 
 	email := "duplicate-" + uuid.NewString() + "@mail.com"
 
+	id, err := uuid.NewV7()
+	if err != nil {
+		t.Fatalf("failed to generate uuid: %v", err)
+	}
+
 	first := User{
-		ID:           uuid.New(),
+		ID:           id,
 		Email:        email,
 		PasswordHash: "hash",
 		Role:         RoleCustomer,
 	}
 
+	id, err = uuid.NewV7()
+	if err != nil {
+		t.Fatalf("failed to generate uuid: %v", err)
+	}
+
 	second := User{
-		ID:           uuid.New(),
+		ID:           id,
 		Email:        email,
 		PasswordHash: "hash",
 		Role:         RoleCustomer,
@@ -158,7 +183,7 @@ func TestRepository_Create_DuplicateEmail(t *testing.T) {
 		_, _ = pool.Exec(ctx, "DELETE FROM users WHERE id = $1", first.ID)
 	})
 
-	err := repo.Create(ctx, second)
+	err = repo.Create(ctx, second)
 	if err == nil {
 		t.Fatalf("expected err, got nil")
 	}
