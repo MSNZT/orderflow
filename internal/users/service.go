@@ -52,8 +52,13 @@ func (s *Service) Register(ctx context.Context, email, password string) (*User, 
 		return nil, fmt.Errorf("%s: hash password: %w", op, err)
 	}
 
+	id, err := uuid.NewV7()
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", op, err)
+	}
+
 	user := User{
-		ID:           uuid.New(),
+		ID:           id,
 		Email:        email,
 		PasswordHash: passwordHash,
 		Role:         RoleCustomer,
