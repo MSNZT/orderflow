@@ -11,6 +11,10 @@ type Service struct {
 	repo *Repository
 }
 
+func NewService(repo *Repository) *Service {
+	return &Service{repo: repo}
+}
+
 func (s *Service) List(ctx context.Context) ([]Product, error) {
 	const op = "products.Service.List"
 

@@ -23,6 +23,10 @@ type getByIDResponse struct {
 	Product *Product `json:"product"`
 }
 
+func NewHandler(log *slog.Logger, service *Service) *Handler {
+	return &Handler{log: log, service: service}
+}
+
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	const op = "products.handler.List"
 

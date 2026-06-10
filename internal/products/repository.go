@@ -33,7 +33,7 @@ func (r *Repository) ListActive(ctx context.Context) ([]Product, error) {
 			updated_at
 		FROM products
 		WHERE is_active = true
-		LIMIT = 20;
+		LIMIT 20;
 	`
 	rows, err := r.pool.Query(ctx, query)
 	if err != nil {

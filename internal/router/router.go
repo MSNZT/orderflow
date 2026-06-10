@@ -7,30 +7,40 @@ import (
 	"github.com/MSNZT/orderflow/internal/auth"
 	"github.com/MSNZT/orderflow/internal/health"
 	"github.com/MSNZT/orderflow/internal/httpmiddleware"
+	"github.com/MSNZT/orderflow/internal/products"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 )
 
-func NewRouter(log *slog.Logger, authHandler *auth.Handler, healthHandler *health.Handler, tokenParser httpmiddleware.TokenParser) http.Handler {
+type RouterDependencies struct {
+	AuthHandler     *auth.Handler
+	ProductsHandler *products.Handler
+	HealthHandler   *health.Handler
+}
+
+func NewRouter(log *slog.Logger, tokenParser httpmiddleware.TokenParser, deps RouterDependencies) http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
 	r.Use(httpmiddleware.RequestLogger(log))
 	r.Use(middleware.Recoverer)
 
-	r.Get("/health/live", healthHandler.Live)
-	r.Get("/health/ready", healthHandler.Ready)
+	r.Get("/health/live", deps.HealthHandler.Live)
+	r.Get("/health/ready", deps.HealthHandler.Ready)
 
 	r.Route("/api/v1", func(r chi.Router) {
-		r.Post("/auth/register", authHandler.Register)
-		r.Post("/auth/login", authHandler.Login)
-		r.Post("/auth/logout", authHandler.Logout)
-		r.Post("/auth/refresh", authHandler.Refresh)
+		r.Post("/auth/register", deps.AuthHandler.Register)
+		r.Post("/auth/login", deps.AuthHandler.Login)
+		r.Post("/auth/logout", deps.AuthHandler.Logout)
+		r.Post("/auth/refresh", deps.AuthHandler.Refresh)
 
 		r.Group(func(r chi.Router) {
 			r.Use(httpmiddleware.Auth(tokenParser))
-			r.Get("/me", authHandler.Me)
+			r.Get("/me", deps.AuthHandler.Me)
 		})
+
+		r.Get("/products", deps.ProductsHandler.List)
+		r.Get("/products/{id}", deps.ProductsHandler.GetByID)
 
 	})
 	return r
