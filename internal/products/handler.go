@@ -19,8 +19,12 @@ type listResponse struct {
 	Products []Product `json:"products"`
 }
 
-type getByIDResponse struct {
-	Product *Product `json:"product"`
+type productResponse struct {
+	ID          uuid.UUID `json:"id"`
+	Name        string    `json:"name"`
+	Description *string   `json:"description"`
+	PriceCents  int64     `json:"price_cents"`
+	Currency    string    `json:"currency"`
 }
 
 func NewHandler(log *slog.Logger, service *Service) *Handler {
@@ -60,12 +64,19 @@ func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
 			httpresponse.Error(w, http.StatusNotFound, "product not found")
 			return
 		default:
+			h.log.Error("failed to get product by id", slog.String("op", op), slog.String("error", err.Error()))
 			httpresponse.Error(w, http.StatusInternalServerError, "internal server error")
 			return
 		}
 	}
 
-	if err := httpresponse.JSON(w, http.StatusOK, getByIDResponse{Product: product}); err != nil {
+	if err := httpresponse.JSON(w, http.StatusOK, productResponse{
+		ID:          product.ID,
+		Name:        product.Name,
+		Description: product.Description,
+		PriceCents:  product.PriceCents,
+		Currency:    product.Currency,
+	}); err != nil {
 		h.log.Error("failed to send json response", slog.String("op", op), slog.String("error", err.Error()))
 		httpresponse.Error(w, http.StatusInternalServerError, "internal server error")
 		return

@@ -7,7 +7,7 @@ import (
 )
 
 type Product struct {
-	Id          uuid.UUID
+	ID          uuid.UUID
 	Name        string
 	Description *string
 	PriceCents  int64
