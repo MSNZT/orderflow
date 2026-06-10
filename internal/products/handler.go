@@ -15,16 +15,16 @@ type Handler struct {
 	log     *slog.Logger
 }
 
-type listResponse struct {
-	Products []Product `json:"products"`
-}
-
 type productResponse struct {
 	ID          uuid.UUID `json:"id"`
 	Name        string    `json:"name"`
 	Description *string   `json:"description"`
 	PriceCents  int64     `json:"price_cents"`
 	Currency    string    `json:"currency"`
+}
+
+type listResponse struct {
+	Products []productResponse `json:"products"`
 }
 
 func NewHandler(log *slog.Logger, service *Service) *Handler {
@@ -36,11 +36,17 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 
 	products, err := h.service.List(r.Context())
 	if err != nil {
+		h.log.Error("failed to get product list", slog.String("op", op), slog.String("error", err.Error()))
 		httpresponse.Error(w, http.StatusInternalServerError, "internal server error")
 		return
 	}
 
-	if err := httpresponse.JSON(w, http.StatusOK, listResponse{Products: products}); err != nil {
+	respProducts := make([]productResponse, len(products))
+	for i, p := range products {
+		respProducts[i] = toProductResponse(p)
+	}
+
+	if err := httpresponse.JSON(w, http.StatusOK, listResponse{Products: respProducts}); err != nil {
 		h.log.Error("failed to send json response", slog.String("op", op), slog.String("error", err.Error()))
 		httpresponse.Error(w, http.StatusInternalServerError, "internal server error")
 		return
@@ -70,15 +76,19 @@ func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if err := httpresponse.JSON(w, http.StatusOK, productResponse{
-		ID:          product.ID,
-		Name:        product.Name,
-		Description: product.Description,
-		PriceCents:  product.PriceCents,
-		Currency:    product.Currency,
-	}); err != nil {
+	if err := httpresponse.JSON(w, http.StatusOK, toProductResponse(*product)); err != nil {
 		h.log.Error("failed to send json response", slog.String("op", op), slog.String("error", err.Error()))
 		httpresponse.Error(w, http.StatusInternalServerError, "internal server error")
 		return
+	}
+}
+
+func toProductResponse(p Product) productResponse {
+	return productResponse{
+		ID:          p.ID,
+		Name:        p.Name,
+		Description: p.Description,
+		PriceCents:  p.PriceCents,
+		Currency:    p.Currency,
 	}
 }

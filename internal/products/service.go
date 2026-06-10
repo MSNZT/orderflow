@@ -31,7 +31,7 @@ func (s *Service) GetByID(ctx context.Context, productID uuid.UUID) (*Product, e
 
 	product, err := s.repo.GetByID(ctx, productID)
 	if err != nil {
-		return product, fmt.Errorf("%s: %w", op, err)
+		return nil, fmt.Errorf("%s: %w", op, err)
 	}
 
 	return product, nil
