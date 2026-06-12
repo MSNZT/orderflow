@@ -13,6 +13,7 @@ import (
 	"github.com/MSNZT/orderflow/internal/httpserver"
 	"github.com/MSNZT/orderflow/internal/logger"
 	"github.com/MSNZT/orderflow/internal/platform/postgres"
+	"github.com/MSNZT/orderflow/internal/products"
 	"github.com/MSNZT/orderflow/internal/router"
 	"github.com/MSNZT/orderflow/internal/sessions"
 	"github.com/MSNZT/orderflow/internal/token"
@@ -47,10 +48,17 @@ func main() {
 
 	sessionsRepository := sessions.NewRepository(dbPool)
 	authService := auth.NewService(usersService, tokenManager, sessionsRepository, cfg.JWT.RefreshTTL)
-
 	authHandler := auth.NewHandler(log, usersService, authService)
 
-	router := router.NewRouter(log, authHandler, healthHandler, tokenManager)
+	productsRepository := products.NewRepository(dbPool)
+	productsService := products.NewService(productsRepository)
+	productsHandler := products.NewHandler(log, productsService)
+
+	router := router.NewRouter(log, tokenManager, router.RouterDependencies{
+		AuthHandler:     authHandler,
+		ProductsHandler: productsHandler,
+		HealthHandler:   healthHandler,
+	})
 
 	server := httpserver.New(cfg, log, router)
 
