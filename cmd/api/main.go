@@ -11,6 +11,7 @@ import (
 	"github.com/MSNZT/orderflow/internal/config"
 	"github.com/MSNZT/orderflow/internal/health"
 	"github.com/MSNZT/orderflow/internal/httpserver"
+	"github.com/MSNZT/orderflow/internal/inventory"
 	"github.com/MSNZT/orderflow/internal/logger"
 	"github.com/MSNZT/orderflow/internal/platform/postgres"
 	"github.com/MSNZT/orderflow/internal/products"
@@ -38,6 +39,8 @@ func main() {
 	}
 	defer dbPool.Close()
 
+	txManager := postgres.NewTxManager(dbPool)
+
 	const cost = 12
 	healthHandler := health.NewHandler(log, dbPool)
 
@@ -50,8 +53,9 @@ func main() {
 	authService := auth.NewService(usersService, tokenManager, sessionsRepository, cfg.JWT.RefreshTTL)
 	authHandler := auth.NewHandler(log, usersService, authService)
 
-	productsRepository := products.NewRepository(dbPool)
-	productsService := products.NewService(productsRepository)
+	productsRepository := products.NewRepository(txManager)
+	inventoryRepository := inventory.NewRepository(txManager)
+	productsService := products.NewService(productsRepository, inventoryRepository, txManager)
 	productsHandler := products.NewHandler(log, productsService)
 
 	router := router.NewRouter(log, tokenManager, router.RouterDependencies{

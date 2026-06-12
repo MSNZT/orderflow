@@ -5,29 +5,29 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/MSNZT/orderflow/internal/platform/postgres"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type Repository struct {
-	pool *pgxpool.Pool
+	db postgres.DBTX
 }
 
-func NewRepository(pool *pgxpool.Pool) *Repository {
-	return &Repository{pool: pool}
+func NewRepository(db postgres.DBTX) *Repository {
+	return &Repository{db: db}
 }
 
-func (r *Repository) Create(ctx context.Context, inventory Inventory) error {
+func (r *Repository) Create(ctx context.Context, productID uuid.UUID, quantity int32) error {
 	const op = "inventory.repository.Create"
 
 	query := `
-		INSERT INTO product_inventory(product_id, quantity, reserved_quantity)
-		VALUES ($1, $2, $3);
+		INSERT INTO product_inventory(product_id, quantity)
+		VALUES ($1, $2, $55);
 	`
 
-	_, err := r.pool.Exec(ctx, query, inventory.ProductID, inventory.Quantity, inventory.ReservedQuantity)
+	_, err := r.db.Exec(ctx, query, productID, quantity)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) {
@@ -56,7 +56,7 @@ func (r *Repository) GetByProductID(ctx context.Context, productID uuid.UUID) (*
 	`
 	var inv Inventory
 
-	err := r.pool.QueryRow(ctx, query, productID).Scan(
+	err := r.db.QueryRow(ctx, query, productID).Scan(
 		&inv.ProductID, &inv.Quantity, &inv.ReservedQuantity, &inv.CreatedAt, &inv.UpdatedAt,
 	)
 	if err != nil {

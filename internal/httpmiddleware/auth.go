@@ -21,18 +21,21 @@ func Auth(tokenParser TokenParser) func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			accessToken, err := extractAuthorizationToken(r)
 			if err != nil {
+				fmt.Println("1-llllllll")
 				_ = httpresponse.Error(w, http.StatusUnauthorized, "unauthorized")
 				return
 			}
 
 			claims, err := tokenParser.ParseAccessToken(accessToken)
 			if err != nil {
+				fmt.Println("2-llllllll")
 				_ = httpresponse.Error(w, http.StatusUnauthorized, "unauthorized")
 				return
 			}
 
 			userID, err := uuid.Parse(claims.Subject)
 			if err != nil {
+				fmt.Println("3-llllllll")
 				_ = httpresponse.Error(w, http.StatusUnauthorized, "unauthorized")
 				return
 			}

@@ -1,7 +1,9 @@
 package products
 
 import (
+	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 
@@ -25,6 +27,22 @@ type productResponse struct {
 
 type listResponse struct {
 	Products []productResponse `json:"products"`
+}
+
+type productCreateRequest struct {
+	Name        string  `json:"name"`
+	Description *string `json:"description"`
+	PriceCents  int64   `json:"price_cents"`
+	Currency    *string `json:"currency"`
+	Quantity    int32   `json:"quantity"`
+}
+
+type productCreateResponse struct {
+	ID          uuid.UUID `json:"id"`
+	Name        string    `json:"name"`
+	Description *string   `json:"description"`
+	PriceCents  int64     `json:"price_cents"`
+	Currency    string    `json:"currency"`
 }
 
 func NewHandler(log *slog.Logger, service *Service) *Handler {
@@ -78,6 +96,62 @@ func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
 
 	if err := httpresponse.JSON(w, http.StatusOK, toProductResponse(*product)); err != nil {
 		h.log.Error("failed to send json response", slog.String("op", op), slog.String("error", err.Error()))
+		httpresponse.Error(w, http.StatusInternalServerError, "internal server error")
+		return
+	}
+}
+
+func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
+	const op = "products.handler.Create"
+
+	var req productCreateRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		fmt.Println("-----3333----", err)
+		httpresponse.Error(w, http.StatusBadRequest, "invalid body")
+		return
+	}
+
+	id, err := uuid.NewV7()
+	if err != nil {
+		fmt.Println("-----4444----", err)
+		httpresponse.Error(w, http.StatusInternalServerError, "internal server error")
+		return
+	}
+
+	var currency string
+	if req.Currency != nil {
+		currency = *req.Currency
+	} else {
+		currency = "RUB"
+	}
+
+	p := Product{
+		ID:          id,
+		Name:        req.Name,
+		Description: req.Description,
+		PriceCents:  req.PriceCents,
+		Currency:    currency,
+	}
+
+	product, err := h.service.Create(r.Context(), &p, req.Quantity)
+	if err != nil {
+		fmt.Println("-----5555----", err)
+		h.log.Error("failed to create product", slog.String("op", op), slog.String("err", err.Error()))
+		httpresponse.Error(w, http.StatusInternalServerError, "internal server error")
+		return
+	}
+
+	res := productCreateResponse{
+		ID:          product.ID,
+		Name:        product.Name,
+		Description: product.Description,
+		PriceCents:  product.PriceCents,
+		Currency:    product.Currency,
+	}
+
+	if err = httpresponse.JSON(w, http.StatusCreated, res); err != nil {
+		fmt.Println("-----6666----", err)
+		h.log.Error("failed to send product response", slog.String("op", op), slog.String("err", err.Error()))
 		httpresponse.Error(w, http.StatusInternalServerError, "internal server error")
 		return
 	}

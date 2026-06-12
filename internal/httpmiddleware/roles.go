@@ -1,6 +1,7 @@
 package httpmiddleware
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/MSNZT/orderflow/internal/authcontext"
@@ -10,9 +11,11 @@ import (
 
 func RequireRole(allowedRoles ...users.Role) func(http.Handler) http.Handler {
 	allowedMap := make(map[users.Role]struct{}, len(allowedRoles))
+
 	for _, role := range allowedRoles {
 		allowedMap[role] = struct{}{}
 	}
+	fmt.Println(allowedMap)
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

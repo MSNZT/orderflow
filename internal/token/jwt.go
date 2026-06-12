@@ -54,23 +54,30 @@ func (m *Manager) ParseAccessToken(accessToken string) (*Claims, error) {
 	claims := &Claims{}
 	parsedToken, err := jwt.ParseWithClaims(accessToken, claims, func(t *jwt.Token) (any, error) {
 		if t.Method != jwt.SigningMethodHS256 {
+			fmt.Println("4-llllllll")
 			return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
 		}
 		return m.secret, nil
 	})
 
+	fmt.Println("--------100-------", err)
+
 	if err != nil {
 		if errors.Is(err, jwt.ErrTokenSignatureInvalid) {
+			fmt.Println("5-llllllll")
 			return nil, fmt.Errorf("%s: %w", op, ErrTokenSignature)
 		}
 		if errors.Is(err, jwt.ErrTokenExpired) {
+			fmt.Println("6-llllllll")
 			return nil, fmt.Errorf("%s: %w", op, ErrTokenExpired)
 		}
 
+		fmt.Println("7-llllllll")
 		return nil, fmt.Errorf("%s: %w", op, ErrTokenInvalid)
 	}
 
 	if !parsedToken.Valid {
+		fmt.Println("8-llllllll")
 		return nil, fmt.Errorf("%s: %w", op, ErrTokenInvalid)
 	}
 
