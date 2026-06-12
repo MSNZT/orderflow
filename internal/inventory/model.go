@@ -7,7 +7,7 @@ import (
 )
 
 type Inventory struct {
-	ID               uuid.UUID
+	ProductID        uuid.UUID
 	Quantity         int32
 	ReservedQuantity int32
 	CreatedAt        time.Time

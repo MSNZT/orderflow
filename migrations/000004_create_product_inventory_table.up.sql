@@ -1,6 +1,5 @@
 CREATE TABLE product_inventory (
-    ID UUID PRIMARY KEY,
-    product_id UUID REFERENCES products(id) ON DELETE CASCADE,
+    product_id UUID PRIMARY KEY REFERENCES products(id) ON DELETE CASCADE,
     quantity INTEGER NOT NULL,
     reserved_quantity INTEGER NOT NULL DEFAULT 0,
 

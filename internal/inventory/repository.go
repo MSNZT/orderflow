@@ -23,11 +23,11 @@ func (r *Repository) Create(ctx context.Context, inventory Inventory) error {
 	const op = "inventory.repository.Create"
 
 	query := `
-		INSERT INTO product_inventory(id, quantity, reserved_quantity)
+		INSERT INTO product_inventory(product_id, quantity, reserved_quantity)
 		VALUES ($1, $2, $3);
 	`
 
-	_, err := r.pool.Exec(ctx, query, inventory.ID, inventory.Quantity, inventory.ReservedQuantity)
+	_, err := r.pool.Exec(ctx, query, inventory.ProductID, inventory.Quantity, inventory.ReservedQuantity)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) {
@@ -46,18 +46,18 @@ func (r *Repository) GetByProductID(ctx context.Context, productID uuid.UUID) (*
 
 	query := `
 		SELECT 
-			inv.id,
-			inv.quantity,
-			inv.reserved_quantity,
-			inv.created_at,
-			inv.updated_at
-		FROM product_inventory inv
-		JOIN products p ON inv.product_id = $1
+			product_id,
+			quantity,
+			reserved_quantity,
+			created_at,
+			updated_at
+		FROM product_inventory
+		WHERE product_id = $1;
 	`
 	var inv Inventory
 
 	err := r.pool.QueryRow(ctx, query, productID).Scan(
-		&inv.ID, &inv.Quantity, &inv.ReservedQuantity, &inv.CreatedAt, &inv.UpdatedAt,
+		&inv.ProductID, &inv.Quantity, &inv.ReservedQuantity, &inv.CreatedAt, &inv.UpdatedAt,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
