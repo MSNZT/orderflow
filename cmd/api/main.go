@@ -53,8 +53,8 @@ func main() {
 	authService := auth.NewService(usersService, tokenManager, sessionsRepository, cfg.JWT.RefreshTTL)
 	authHandler := auth.NewHandler(log, usersService, authService)
 
-	productsRepository := products.NewRepository(txManager)
-	inventoryRepository := inventory.NewRepository(txManager)
+	productsRepository := products.NewRepository(dbPool)
+	inventoryRepository := inventory.NewRepository(dbPool)
 	productsService := products.NewService(productsRepository, inventoryRepository, txManager)
 	productsHandler := products.NewHandler(log, productsService)
 

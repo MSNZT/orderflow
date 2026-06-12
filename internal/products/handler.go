@@ -3,7 +3,6 @@ package products
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"log/slog"
 	"net/http"
 
@@ -35,6 +34,7 @@ type productCreateRequest struct {
 	PriceCents  int64   `json:"price_cents"`
 	Currency    *string `json:"currency"`
 	Quantity    int32   `json:"quantity"`
+	IsActive    *bool   `json:"is_active"`
 }
 
 type productCreateResponse struct {
@@ -106,14 +106,12 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 
 	var req productCreateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		fmt.Println("-----3333----", err)
 		httpresponse.Error(w, http.StatusBadRequest, "invalid body")
 		return
 	}
 
 	id, err := uuid.NewV7()
 	if err != nil {
-		fmt.Println("-----4444----", err)
 		httpresponse.Error(w, http.StatusInternalServerError, "internal server error")
 		return
 	}
@@ -125,17 +123,22 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		currency = "RUB"
 	}
 
+	isActive := true
+	if req.IsActive != nil {
+		isActive = *req.IsActive
+	}
+
 	p := Product{
 		ID:          id,
 		Name:        req.Name,
 		Description: req.Description,
 		PriceCents:  req.PriceCents,
 		Currency:    currency,
+		IsActive:    isActive,
 	}
 
 	product, err := h.service.Create(r.Context(), &p, req.Quantity)
 	if err != nil {
-		fmt.Println("-----5555----", err)
 		h.log.Error("failed to create product", slog.String("op", op), slog.String("err", err.Error()))
 		httpresponse.Error(w, http.StatusInternalServerError, "internal server error")
 		return
@@ -150,7 +153,6 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err = httpresponse.JSON(w, http.StatusCreated, res); err != nil {
-		fmt.Println("-----6666----", err)
 		h.log.Error("failed to send product response", slog.String("op", op), slog.String("err", err.Error()))
 		httpresponse.Error(w, http.StatusInternalServerError, "internal server error")
 		return

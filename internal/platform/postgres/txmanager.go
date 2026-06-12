@@ -5,8 +5,15 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+type DBTX interface {
+	Exec(ctx context.Context, sql string, arguments ...any) (pgconn.CommandTag, error)
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+}
 
 type TxManager struct {
 	pool *pgxpool.Pool
@@ -16,7 +23,9 @@ func NewTxManager(pool *pgxpool.Pool) *TxManager {
 	return &TxManager{pool: pool}
 }
 
-func (m *TxManager) WithinTx(ctx context.Context, fn func(ctx context.Context, db DBTX) error) error {
+type txKey struct{}
+
+func (m *TxManager) WithinTx(ctx context.Context, fn func(ctx context.Context) error) error {
 	const op = "postgres.TxManager.WithinTx"
 
 	tx, err := m.pool.BeginTx(ctx, pgx.TxOptions{})
@@ -28,7 +37,9 @@ func (m *TxManager) WithinTx(ctx context.Context, fn func(ctx context.Context, d
 		_ = tx.Rollback(ctx)
 	}()
 
-	if err := fn(ctx, tx); err != nil {
+	txCtx := context.WithValue(ctx, txKey{}, tx)
+
+	if err := fn(txCtx); err != nil {
 		return fmt.Errorf("%s: execute tx: %w", op, err)
 	}
 
@@ -37,4 +48,11 @@ func (m *TxManager) WithinTx(ctx context.Context, fn func(ctx context.Context, d
 	}
 
 	return nil
+}
+
+func ExecutorFromContext(ctx context.Context, defaultDB DBTX) DBTX {
+	if tx, ok := ctx.Value(txKey{}).(DBTX); ok {
+		return tx
+	}
+	return defaultDB
 }

@@ -37,7 +37,10 @@ func (r *Repository) ListActive(ctx context.Context) ([]Product, error) {
 		ORDER BY created_at DESC
 		LIMIT 20;
 	`
-	rows, err := r.db.Query(ctx, query)
+
+	db := postgres.ExecutorFromContext(ctx, r.db)
+
+	rows, err := db.Query(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", op, err)
 	}
@@ -78,7 +81,10 @@ func (r *Repository) GetByID(ctx context.Context, id uuid.UUID) (*Product, error
 		WHERE id = $1 AND is_active = true;
 	`
 	var p Product
-	if err := r.db.QueryRow(ctx, query, id).Scan(
+
+	db := postgres.ExecutorFromContext(ctx, r.db)
+
+	if err := db.QueryRow(ctx, query, id).Scan(
 		&p.ID, &p.Name, &p.Description, &p.PriceCents,
 		&p.Currency, &p.IsActive, &p.CreatedAt, &p.UpdatedAt); err != nil {
 
@@ -102,8 +108,9 @@ func (r *Repository) Create(ctx context.Context, p *Product) (*Product, error) {
 	`
 
 	var product Product
+	db := postgres.ExecutorFromContext(ctx, r.db)
 
-	err := r.db.QueryRow(ctx, query,
+	err := db.QueryRow(ctx, query,
 		p.ID, p.Name, p.Description, p.PriceCents, p.Currency, p.IsActive,
 	).Scan(
 		&product.ID, &product.Name, &product.Description, &product.PriceCents, &product.Currency,

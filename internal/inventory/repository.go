@@ -24,10 +24,12 @@ func (r *Repository) Create(ctx context.Context, productID uuid.UUID, quantity i
 
 	query := `
 		INSERT INTO product_inventory(product_id, quantity)
-		VALUES ($1, $2, $55);
+		VALUES ($1, $2);
 	`
 
-	_, err := r.db.Exec(ctx, query, productID, quantity)
+	db := postgres.ExecutorFromContext(ctx, r.db)
+
+	_, err := db.Exec(ctx, query, productID, quantity)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) {
@@ -56,7 +58,9 @@ func (r *Repository) GetByProductID(ctx context.Context, productID uuid.UUID) (*
 	`
 	var inv Inventory
 
-	err := r.db.QueryRow(ctx, query, productID).Scan(
+	db := postgres.ExecutorFromContext(ctx, r.db)
+
+	err := db.QueryRow(ctx, query, productID).Scan(
 		&inv.ProductID, &inv.Quantity, &inv.ReservedQuantity, &inv.CreatedAt, &inv.UpdatedAt,
 	)
 	if err != nil {

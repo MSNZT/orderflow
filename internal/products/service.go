@@ -10,17 +10,17 @@ import (
 )
 
 type Service struct {
-	productRepo  *Repository
-	iventoryRepo *inventory.Repository
-	txManager    *postgres.TxManager
+	productRepo   *Repository
+	inventoryRepo *inventory.Repository
+	txManager     *postgres.TxManager
 }
 
 func NewService(
 	productRepo *Repository,
-	iventoryRepo *inventory.Repository,
+	inventoryRepo *inventory.Repository,
 	txManager *postgres.TxManager,
 ) *Service {
-	return &Service{productRepo: productRepo, iventoryRepo: iventoryRepo, txManager: txManager}
+	return &Service{productRepo: productRepo, inventoryRepo: inventoryRepo, txManager: txManager}
 }
 
 func (s *Service) List(ctx context.Context) ([]Product, error) {
@@ -58,7 +58,7 @@ func (s *Service) Create(ctx context.Context, product *Product, quantity int32) 
 
 	var createdProduct *Product
 
-	err := s.txManager.WithinTx(ctx, func(txCtx context.Context, db postgres.DBTX) error {
+	err := s.txManager.WithinTx(ctx, func(txCtx context.Context) error {
 		var err error
 
 		createdProduct, err = s.productRepo.Create(txCtx, product)
@@ -66,7 +66,7 @@ func (s *Service) Create(ctx context.Context, product *Product, quantity int32) 
 			return fmt.Errorf("%s: %w", op, err)
 		}
 
-		err = s.iventoryRepo.Create(txCtx, createdProduct.ID, quantity)
+		err = s.inventoryRepo.Create(txCtx, createdProduct.ID, quantity)
 		if err != nil {
 			return fmt.Errorf("%s: %w", op, err)
 		}
