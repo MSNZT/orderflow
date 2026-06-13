@@ -5,7 +5,6 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
-	"strings"
 
 	"github.com/MSNZT/orderflow/internal/httpresponse"
 	"github.com/go-chi/chi/v5"
@@ -33,9 +32,8 @@ type productCreateRequest struct {
 	Name            string  `json:"name"`
 	Description     *string `json:"description"`
 	PriceCents      int64   `json:"price_cents"`
-	Currency        *string `json:"currency"`
+	Currency        string  `json:"currency"`
 	InitialQuantity int32   `json:"initial_quantity"`
-	IsActive        *bool   `json:"is_active"`
 }
 
 func NewHandler(log *slog.Logger, service *Service) *Handler {
@@ -103,15 +101,15 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	p := Product{
-		Name:        req.Name,
-		Description: req.Description,
-		PriceCents:  req.PriceCents,
-		Currency:    ptrToString(req.Currency),
-		IsActive:    ptrToBool(req.IsActive),
+	input := createInput{
+		Name:            req.Name,
+		Description:     req.Description,
+		PriceCents:      req.PriceCents,
+		Currency:        req.Currency,
+		InitialQuantity: req.InitialQuantity,
 	}
 
-	product, err := h.service.Create(r.Context(), &p, req.InitialQuantity)
+	product, err := h.service.Create(r.Context(), input)
 	if err != nil {
 		switch {
 		case errors.Is(err, ErrProductNameInvalid):
@@ -151,18 +149,4 @@ func toProductResponse(p Product) productResponse {
 		PriceCents:  p.PriceCents,
 		Currency:    p.Currency,
 	}
-}
-
-func ptrToString(str *string) string {
-	if str == nil {
-		return ""
-	}
-	return strings.TrimSpace(*str)
-}
-
-func ptrToBool(bool *bool) bool {
-	if bool == nil {
-		return true
-	}
-	return *bool
 }

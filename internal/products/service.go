@@ -16,6 +16,14 @@ type Service struct {
 	txManager     *postgres.TxManager
 }
 
+type createInput struct {
+	Name            string
+	Description     *string
+	PriceCents      int64
+	Currency        string
+	InitialQuantity int32
+}
+
 func NewService(
 	productRepo *Repository,
 	inventoryRepo *inventory.Repository,
@@ -46,33 +54,43 @@ func (s *Service) GetByID(ctx context.Context, productID uuid.UUID) (*Product, e
 	return product, nil
 }
 
-func (s *Service) Create(ctx context.Context, product *Product, quantity int32) (*Product, error) {
+func (s *Service) Create(ctx context.Context, input createInput) (*Product, error) {
 	const op = "products.service.Create"
+
+	if input.Currency == "" {
+		input.Currency = "RUB"
+	}
+
+	name := strings.TrimSpace(input.Name)
+	if len(name) <= 0 {
+		return nil, fmt.Errorf("%s: %w", op, ErrProductNameInvalid)
+	}
+
+	currency := strings.TrimSpace(input.Currency)
+	if input.Currency != "RUB" {
+		return nil, fmt.Errorf("%s: %w", op, ErrProductCurrencyInvalid)
+	}
+
+	if input.PriceCents <= 0 {
+		return nil, fmt.Errorf("%s: %w", op, ErrProductPriceCentsInvalid)
+	}
+
+	if input.InitialQuantity < 0 {
+		return nil, fmt.Errorf("%s: %w", op, ErrInitialQuantityInvalid)
+	}
 
 	id, err := uuid.NewV7()
 	if err != nil {
 		return nil, fmt.Errorf("%s: failed to generate uuid: %w", op, err)
 	}
-	product.ID = id
 
-	if product.Currency == "" {
-		product.Currency = "RUB"
-	}
-
-	if len(strings.TrimSpace(product.Name)) == 0 {
-		return nil, fmt.Errorf("%s: %w", op, ErrProductNameInvalid)
-	}
-
-	if product.Currency != "RUB" {
-		return nil, fmt.Errorf("%s: %w", op, ErrProductCurrencyInvalid)
-	}
-
-	if product.PriceCents <= 0 {
-		return nil, fmt.Errorf("%s: %w", op, ErrProductPriceCentsInvalid)
-	}
-
-	if quantity < 0 {
-		return nil, fmt.Errorf("%s: %w", op, ErrInitialQuantityInvalid)
+	product := Product{
+		ID:          id,
+		Name:        name,
+		Description: input.Description,
+		Currency:    currency,
+		PriceCents:  input.PriceCents,
+		IsActive:    true,
 	}
 
 	var createdProduct *Product
@@ -80,12 +98,12 @@ func (s *Service) Create(ctx context.Context, product *Product, quantity int32) 
 	err = s.txManager.WithinTx(ctx, func(txCtx context.Context) error {
 		var err error
 
-		createdProduct, err = s.productRepo.Create(txCtx, product)
+		createdProduct, err = s.productRepo.Create(txCtx, &product)
 		if err != nil {
 			return err
 		}
 
-		err = s.inventoryRepo.Create(txCtx, createdProduct.ID, quantity)
+		err = s.inventoryRepo.Create(txCtx, createdProduct.ID, input.InitialQuantity)
 		if err != nil {
 			return err
 		}
