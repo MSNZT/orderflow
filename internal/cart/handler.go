@@ -19,8 +19,16 @@ type Handler struct {
 }
 
 type listResponse struct {
-	Items           []CartItem `json:"items"`
-	TotalPriceCents int64      `json:"total_price_cents"`
+	Items           []cartItemResponse `json:"items"`
+	TotalPriceCents int64              `json:"total_price_cents"`
+}
+
+type cartItemResponse struct {
+	ProductID           uuid.UUID `json:"product_id"`
+	Name                string    `json:"name"`
+	PriceCents          int64     `json:"price_cents"`
+	Quantity            int32     `json:"quantity"`
+	LineTotalPriceCents int64     `json:"line_total_price_cents"`
 }
 
 type addItemRequest struct {
@@ -49,10 +57,8 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	}
 	limit, ok := parsePagination(queryParams, "limit")
 	if !ok {
-		if !ok {
-			httpresponse.Error(w, http.StatusBadRequest, "invalid query params")
-			return
-		}
+		httpresponse.Error(w, http.StatusBadRequest, "invalid query params")
+		return
 	}
 
 	input := listInput{
@@ -74,8 +80,13 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	cartItems := make([]cartItemResponse, len(cart.Items))
+	for i, item := range cart.Items {
+		cartItems[i] = toCartItemResponse(item)
+	}
+
 	if err := httpresponse.JSON(w, http.StatusOK, listResponse{
-		Items:           cart.Items,
+		Items:           cartItems,
 		TotalPriceCents: cart.TotalPriceCents,
 	}); err != nil {
 		h.log.Error("failed to send cart response", slog.String("op", op), slog.String("err", err.Error()))
@@ -106,9 +117,24 @@ func (h *Handler) AddItem(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.service.AddItem(r.Context(), input); err != nil {
-		h.log.Error("failed to add item to cart items", slog.String("op", op), slog.String("err", err.Error()))
-		httpresponse.Error(w, http.StatusInternalServerError, "internal server error")
-		return
+		switch {
+		case errors.Is(err, ErrUserIDIsNil):
+			httpresponse.Error(w, http.StatusUnauthorized, "unauthorized")
+			return
+		case errors.Is(err, ErrProductIDIsNil):
+			httpresponse.Error(w, http.StatusBadRequest, ErrProductIDIsNil.Error())
+			return
+		case errors.Is(err, ErrQuantityInvalid):
+			httpresponse.Error(w, http.StatusUnprocessableEntity, ErrQuantityInvalid.Error())
+			return
+		case errors.Is(err, ErrProductNotAvailable):
+			httpresponse.Error(w, http.StatusNotFound, ErrProductNotAvailable.Error())
+			return
+		default:
+			h.log.Error("failed to add item to cart items", slog.String("op", op), slog.String("err", err.Error()))
+			httpresponse.Error(w, http.StatusInternalServerError, "internal server error")
+			return
+		}
 	}
 
 	httpresponse.NoContent(w)
@@ -125,4 +151,14 @@ func parsePagination(urlValues url.Values, key string) (int32, bool) {
 		return int32(0), false
 	}
 	return int32(v), true
+}
+
+func toCartItemResponse(item CartItem) cartItemResponse {
+	return cartItemResponse{
+		ProductID:           item.ProductID,
+		Name:                item.Name,
+		PriceCents:          item.PriceCents,
+		Quantity:            item.Quantity,
+		LineTotalPriceCents: item.LineTotalPriceCents,
+	}
 }

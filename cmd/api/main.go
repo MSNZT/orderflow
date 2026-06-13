@@ -60,7 +60,7 @@ func main() {
 	productsHandler := products.NewHandler(log, productsService)
 
 	cartRepository := cart.NewRepository(dbPool)
-	cartService := cart.NewService(cartRepository, txManager)
+	cartService := cart.NewService(cartRepository, txManager, productsService)
 	cartHandler := cart.NewHandler(log, cartService)
 
 	router := router.NewRouter(log, tokenManager, router.RouterDependencies{
