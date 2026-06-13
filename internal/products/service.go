@@ -3,6 +3,7 @@ package products
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/MSNZT/orderflow/internal/inventory"
 	"github.com/MSNZT/orderflow/internal/platform/postgres"
@@ -48,27 +49,45 @@ func (s *Service) GetByID(ctx context.Context, productID uuid.UUID) (*Product, e
 func (s *Service) Create(ctx context.Context, product *Product, quantity int32) (*Product, error) {
 	const op = "products.service.Create"
 
+	id, err := uuid.NewV7()
+	if err != nil {
+		return nil, fmt.Errorf("%s: failed to generate uuid: %w", op, err)
+	}
+	product.ID = id
+
+	if product.Currency == "" {
+		product.Currency = "RUB"
+	}
+
+	if len(strings.TrimSpace(product.Name)) == 0 {
+		return nil, fmt.Errorf("%s: %w", op, ErrProductNameInvalid)
+	}
+
+	if product.Currency != "RUB" {
+		return nil, fmt.Errorf("%s: %w", op, ErrProductCurrencyInvalid)
+	}
+
 	if product.PriceCents <= 0 {
 		return nil, fmt.Errorf("%s: %w", op, ErrProductPriceCentsInvalid)
 	}
 
-	if product.Currency != "" && product.Currency != "RUB" && product.Currency != "USD" {
-		return nil, fmt.Errorf("%s: %w", op, ErrProductCurrencyInvalid)
+	if quantity < 0 {
+		return nil, fmt.Errorf("%s: %w", op, ErrInitialQuantityInvalid)
 	}
 
 	var createdProduct *Product
 
-	err := s.txManager.WithinTx(ctx, func(txCtx context.Context) error {
+	err = s.txManager.WithinTx(ctx, func(txCtx context.Context) error {
 		var err error
 
 		createdProduct, err = s.productRepo.Create(txCtx, product)
 		if err != nil {
-			return fmt.Errorf("%s: %w", op, err)
+			return err
 		}
 
 		err = s.inventoryRepo.Create(txCtx, createdProduct.ID, quantity)
 		if err != nil {
-			return fmt.Errorf("%s: %w", op, err)
+			return err
 		}
 		return nil
 	})

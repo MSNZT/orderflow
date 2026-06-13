@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"strings"
 
 	"github.com/MSNZT/orderflow/internal/httpresponse"
 	"github.com/go-chi/chi/v5"
@@ -29,20 +30,12 @@ type listResponse struct {
 }
 
 type productCreateRequest struct {
-	Name        string  `json:"name"`
-	Description *string `json:"description"`
-	PriceCents  int64   `json:"price_cents"`
-	Currency    *string `json:"currency"`
-	Quantity    int32   `json:"quantity"`
-	IsActive    *bool   `json:"is_active"`
-}
-
-type productCreateResponse struct {
-	ID          uuid.UUID `json:"id"`
-	Name        string    `json:"name"`
-	Description *string   `json:"description"`
-	PriceCents  int64     `json:"price_cents"`
-	Currency    string    `json:"currency"`
+	Name            string  `json:"name"`
+	Description     *string `json:"description"`
+	PriceCents      int64   `json:"price_cents"`
+	Currency        *string `json:"currency"`
+	InitialQuantity int32   `json:"initial_quantity"`
+	IsActive        *bool   `json:"is_active"`
 }
 
 func NewHandler(log *slog.Logger, service *Service) *Handler {
@@ -110,49 +103,40 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	id, err := uuid.NewV7()
-	if err != nil {
-		httpresponse.Error(w, http.StatusInternalServerError, "internal server error")
-		return
-	}
-
-	var currency string
-	if req.Currency != nil {
-		currency = *req.Currency
-	} else {
-		currency = "RUB"
-	}
-
-	isActive := true
-	if req.IsActive != nil {
-		isActive = *req.IsActive
-	}
-
 	p := Product{
-		ID:          id,
 		Name:        req.Name,
 		Description: req.Description,
 		PriceCents:  req.PriceCents,
-		Currency:    currency,
-		IsActive:    isActive,
+		Currency:    ptrToString(req.Currency),
+		IsActive:    ptrToBool(req.IsActive),
 	}
 
-	product, err := h.service.Create(r.Context(), &p, req.Quantity)
+	product, err := h.service.Create(r.Context(), &p, req.InitialQuantity)
 	if err != nil {
-		h.log.Error("failed to create product", slog.String("op", op), slog.String("err", err.Error()))
-		httpresponse.Error(w, http.StatusInternalServerError, "internal server error")
-		return
+		switch {
+		case errors.Is(err, ErrProductNameInvalid):
+			httpresponse.Error(w, http.StatusUnprocessableEntity, ErrProductNameInvalid.Error())
+			return
+		case errors.Is(err, ErrProductPriceCentsInvalid):
+			httpresponse.Error(w, http.StatusUnprocessableEntity, ErrProductPriceCentsInvalid.Error())
+			return
+		case errors.Is(err, ErrProductCurrencyInvalid):
+			httpresponse.Error(w, http.StatusUnprocessableEntity, ErrProductCurrencyInvalid.Error())
+			return
+		case errors.Is(err, ErrInitialQuantityInvalid):
+			httpresponse.Error(w, http.StatusUnprocessableEntity, ErrInitialQuantityInvalid.Error())
+			return
+		case errors.Is(err, ErrProductAlreadyExists):
+			httpresponse.Error(w, http.StatusConflict, ErrProductAlreadyExists.Error())
+			return
+		default:
+			h.log.Error("failed to create product", slog.String("op", op), slog.String("err", err.Error()))
+			httpresponse.Error(w, http.StatusInternalServerError, "internal server error")
+			return
+		}
 	}
 
-	res := productCreateResponse{
-		ID:          product.ID,
-		Name:        product.Name,
-		Description: product.Description,
-		PriceCents:  product.PriceCents,
-		Currency:    product.Currency,
-	}
-
-	if err = httpresponse.JSON(w, http.StatusCreated, res); err != nil {
+	if err = httpresponse.JSON(w, http.StatusCreated, toProductResponse(*product)); err != nil {
 		h.log.Error("failed to send product response", slog.String("op", op), slog.String("err", err.Error()))
 		httpresponse.Error(w, http.StatusInternalServerError, "internal server error")
 		return
@@ -167,4 +151,18 @@ func toProductResponse(p Product) productResponse {
 		PriceCents:  p.PriceCents,
 		Currency:    p.Currency,
 	}
+}
+
+func ptrToString(str *string) string {
+	if str == nil {
+		return ""
+	}
+	return strings.TrimSpace(*str)
+}
+
+func ptrToBool(bool *bool) bool {
+	if bool == nil {
+		return true
+	}
+	return *bool
 }

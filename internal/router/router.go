@@ -43,7 +43,9 @@ func NewRouter(log *slog.Logger, tokenParser httpmiddleware.TokenParser, deps Ro
 		r.Route("/products", func(r chi.Router) {
 			r.Get("/", deps.ProductsHandler.List)
 			r.Get("/{id}", deps.ProductsHandler.GetByID)
+		})
 
+		r.Route("/management/products", func(r chi.Router) {
 			r.Group(func(r chi.Router) {
 				r.Use(httpmiddleware.Auth(tokenParser))
 				r.Use(httpmiddleware.RequireRole(users.RoleManager, users.RoleAdmin))
