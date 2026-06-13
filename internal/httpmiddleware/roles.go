@@ -10,6 +10,7 @@ import (
 
 func RequireRole(allowedRoles ...users.Role) func(http.Handler) http.Handler {
 	allowedMap := make(map[users.Role]struct{}, len(allowedRoles))
+
 	for _, role := range allowedRoles {
 		allowedMap[role] = struct{}{}
 	}

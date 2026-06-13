@@ -1,6 +1,7 @@
 package products
 
 import (
+	"encoding/json"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -25,6 +26,14 @@ type productResponse struct {
 
 type listResponse struct {
 	Products []productResponse `json:"products"`
+}
+
+type productCreateRequest struct {
+	Name            string  `json:"name"`
+	Description     *string `json:"description"`
+	PriceCents      int64   `json:"price_cents"`
+	Currency        string  `json:"currency"`
+	InitialQuantity int32   `json:"initial_quantity"`
 }
 
 func NewHandler(log *slog.Logger, service *Service) *Handler {
@@ -78,6 +87,55 @@ func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
 
 	if err := httpresponse.JSON(w, http.StatusOK, toProductResponse(*product)); err != nil {
 		h.log.Error("failed to send json response", slog.String("op", op), slog.String("error", err.Error()))
+		httpresponse.Error(w, http.StatusInternalServerError, "internal server error")
+		return
+	}
+}
+
+func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
+	const op = "products.handler.Create"
+
+	var req productCreateRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		httpresponse.Error(w, http.StatusBadRequest, "invalid body")
+		return
+	}
+
+	input := createInput{
+		Name:            req.Name,
+		Description:     req.Description,
+		PriceCents:      req.PriceCents,
+		Currency:        req.Currency,
+		InitialQuantity: req.InitialQuantity,
+	}
+
+	product, err := h.service.Create(r.Context(), input)
+	if err != nil {
+		switch {
+		case errors.Is(err, ErrProductNameInvalid):
+			httpresponse.Error(w, http.StatusUnprocessableEntity, ErrProductNameInvalid.Error())
+			return
+		case errors.Is(err, ErrProductPriceCentsInvalid):
+			httpresponse.Error(w, http.StatusUnprocessableEntity, ErrProductPriceCentsInvalid.Error())
+			return
+		case errors.Is(err, ErrProductCurrencyInvalid):
+			httpresponse.Error(w, http.StatusUnprocessableEntity, ErrProductCurrencyInvalid.Error())
+			return
+		case errors.Is(err, ErrInitialQuantityInvalid):
+			httpresponse.Error(w, http.StatusUnprocessableEntity, ErrInitialQuantityInvalid.Error())
+			return
+		case errors.Is(err, ErrProductAlreadyExists):
+			httpresponse.Error(w, http.StatusConflict, ErrProductAlreadyExists.Error())
+			return
+		default:
+			h.log.Error("failed to create product", slog.String("op", op), slog.String("err", err.Error()))
+			httpresponse.Error(w, http.StatusInternalServerError, "internal server error")
+			return
+		}
+	}
+
+	if err = httpresponse.JSON(w, http.StatusCreated, toProductResponse(*product)); err != nil {
+		h.log.Error("failed to send product response", slog.String("op", op), slog.String("err", err.Error()))
 		httpresponse.Error(w, http.StatusInternalServerError, "internal server error")
 		return
 	}

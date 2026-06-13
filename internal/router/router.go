@@ -8,6 +8,7 @@ import (
 	"github.com/MSNZT/orderflow/internal/health"
 	"github.com/MSNZT/orderflow/internal/httpmiddleware"
 	"github.com/MSNZT/orderflow/internal/products"
+	"github.com/MSNZT/orderflow/internal/users"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 )
@@ -39,9 +40,19 @@ func NewRouter(log *slog.Logger, tokenParser httpmiddleware.TokenParser, deps Ro
 			r.Get("/me", deps.AuthHandler.Me)
 		})
 
-		r.Get("/products", deps.ProductsHandler.List)
-		r.Get("/products/{id}", deps.ProductsHandler.GetByID)
+		r.Route("/products", func(r chi.Router) {
+			r.Get("/", deps.ProductsHandler.List)
+			r.Get("/{id}", deps.ProductsHandler.GetByID)
+		})
 
+		r.Route("/management/products", func(r chi.Router) {
+			r.Group(func(r chi.Router) {
+				r.Use(httpmiddleware.Auth(tokenParser))
+				r.Use(httpmiddleware.RequireRole(users.RoleManager, users.RoleAdmin))
+
+				r.Post("/", deps.ProductsHandler.Create)
+			})
+		})
 	})
 	return r
 }

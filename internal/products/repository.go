@@ -5,17 +5,18 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/MSNZT/orderflow/internal/platform/postgres"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 type Repository struct {
-	pool *pgxpool.Pool
+	db postgres.DBTX
 }
 
-func NewRepository(pool *pgxpool.Pool) *Repository {
-	return &Repository{pool: pool}
+func NewRepository(db postgres.DBTX) *Repository {
+	return &Repository{db: db}
 }
 
 func (r *Repository) ListActive(ctx context.Context) ([]Product, error) {
@@ -36,7 +37,10 @@ func (r *Repository) ListActive(ctx context.Context) ([]Product, error) {
 		ORDER BY created_at DESC
 		LIMIT 20;
 	`
-	rows, err := r.pool.Query(ctx, query)
+
+	db := postgres.ExecutorFromContext(ctx, r.db)
+
+	rows, err := db.Query(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", op, err)
 	}
@@ -77,7 +81,10 @@ func (r *Repository) GetByID(ctx context.Context, id uuid.UUID) (*Product, error
 		WHERE id = $1 AND is_active = true;
 	`
 	var p Product
-	if err := r.pool.QueryRow(ctx, query, id).Scan(
+
+	db := postgres.ExecutorFromContext(ctx, r.db)
+
+	if err := db.QueryRow(ctx, query, id).Scan(
 		&p.ID, &p.Name, &p.Description, &p.PriceCents,
 		&p.Currency, &p.IsActive, &p.CreatedAt, &p.UpdatedAt); err != nil {
 
@@ -89,4 +96,35 @@ func (r *Repository) GetByID(ctx context.Context, id uuid.UUID) (*Product, error
 	}
 
 	return &p, nil
+}
+
+func (r *Repository) Create(ctx context.Context, p *Product) (*Product, error) {
+	const op = "products.repository.Create"
+
+	query := `
+		INSERT INTO products(id, name, description, price_cents, currency, is_active)
+		VALUES ($1, $2, $3, $4, $5, $6) 
+		RETURNING id, name, description, price_cents, currency, is_active, created_at, updated_at;
+	`
+
+	var product Product
+	db := postgres.ExecutorFromContext(ctx, r.db)
+
+	err := db.QueryRow(ctx, query,
+		p.ID, p.Name, p.Description, p.PriceCents, p.Currency, p.IsActive,
+	).Scan(
+		&product.ID, &product.Name, &product.Description, &product.PriceCents, &product.Currency,
+		&product.IsActive, &product.CreatedAt, &product.UpdatedAt,
+	)
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			if pgErr.Code == "23505" {
+				return nil, fmt.Errorf("%s: %w", op, ErrProductAlreadyExists)
+			}
+		}
+		return nil, fmt.Errorf("%s: %w", op, err)
+	}
+
+	return &product, nil
 }
