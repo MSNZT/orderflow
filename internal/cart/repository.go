@@ -27,7 +27,7 @@ func (r *Repository) List(ctx context.Context, userId uuid.UUID, limit int32, of
 			p.price_cents,
 			ci.created_at,
 			ci.updated_at
-		FROM cart c
+		FROM carts c
 		JOIN cart_items ci ON c.id = ci.cart_id
 		JOIN products p ON ci.product_id = p.id
 		WHERE c.user_id = $1
@@ -69,7 +69,7 @@ func (r *Repository) CreateByUserID(ctx context.Context, userID uuid.UUID) (uuid
 	const op = "cart.repository.CreateByUserID"
 
 	query := `
-		INSERT INTO cart (id, user_id)
+		INSERT INTO carts (id, user_id)
 		VALUES (gen_random_uuid(), $1)
 		ON CONFLICT (user_id)
 		DO UPDATE SET user_id = EXCLUDED.user_id

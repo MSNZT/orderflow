@@ -2,19 +2,26 @@ package cart
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/MSNZT/orderflow/internal/platform/postgres"
+	"github.com/MSNZT/orderflow/internal/products"
 	"github.com/google/uuid"
 )
 
-type Service struct {
-	repo      *Repository
-	txManager *postgres.TxManager
+type ProductsProvider interface {
+	GetByID(ctx context.Context, productID uuid.UUID) (*products.Product, error)
 }
 
-func NewService(repo *Repository, txManager *postgres.TxManager) *Service {
-	return &Service{repo: repo, txManager: txManager}
+type Service struct {
+	repo            *Repository
+	txManager       *postgres.TxManager
+	productsService ProductsProvider
+}
+
+func NewService(repo *Repository, txManager *postgres.TxManager, productService ProductsProvider) *Service {
+	return &Service{repo: repo, txManager: txManager, productsService: productService}
 }
 
 type listInput struct {
@@ -76,13 +83,21 @@ func (s *Service) AddItem(ctx context.Context, input addItemInput) error {
 		return fmt.Errorf("%s: %w", op, ErrQuantityInvalid)
 	}
 
-	err := s.txManager.WithinTx(ctx, func(txCtx context.Context) error {
+	product, err := s.productsService.GetByID(ctx, input.ProductID)
+	if err != nil {
+		if errors.Is(err, products.ErrProductNotFound) {
+			return fmt.Errorf("%s: %w", op, ErrProductNotAvailable)
+		}
+		return fmt.Errorf("%s: %w", op, err)
+	}
+
+	err = s.txManager.WithinTx(ctx, func(txCtx context.Context) error {
 		cartID, err := s.repo.CreateByUserID(txCtx, input.UserID)
 		if err != nil {
 			return err
 		}
 
-		if err := s.repo.AddItem(txCtx, cartID, input.ProductID, input.Quantity); err != nil {
+		if err := s.repo.AddItem(txCtx, cartID, product.ID, input.Quantity); err != nil {
 			return err
 		}
 
