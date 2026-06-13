@@ -8,6 +8,7 @@ import (
 	"syscall"
 
 	"github.com/MSNZT/orderflow/internal/auth"
+	"github.com/MSNZT/orderflow/internal/cart"
 	"github.com/MSNZT/orderflow/internal/config"
 	"github.com/MSNZT/orderflow/internal/health"
 	"github.com/MSNZT/orderflow/internal/httpserver"
@@ -58,9 +59,14 @@ func main() {
 	productsService := products.NewService(productsRepository, inventoryRepository, txManager)
 	productsHandler := products.NewHandler(log, productsService)
 
+	cartRepository := cart.NewRepository(dbPool)
+	cartService := cart.NewService(cartRepository, txManager)
+	cartHandler := cart.NewHandler(log, cartService)
+
 	router := router.NewRouter(log, tokenManager, router.RouterDependencies{
 		AuthHandler:     authHandler,
 		ProductsHandler: productsHandler,
+		CartHandler:     cartHandler,
 		HealthHandler:   healthHandler,
 	})
 
