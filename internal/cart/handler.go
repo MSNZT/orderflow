@@ -148,8 +148,8 @@ func (h *Handler) AddItem(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) UpdateItemQuantity(w http.ResponseWriter, r *http.Request) {
 	const op = "cart.handler.UpdateItemQuantity"
 
-	url := chi.URLParam(r, "productID")
-	productID, err := uuid.Parse(url)
+	productIDParam := chi.URLParam(r, "productID")
+	productID, err := uuid.Parse(productIDParam)
 	if err != nil {
 		httpresponse.BadRequest(w)
 		return
@@ -211,13 +211,12 @@ func (h *Handler) DeleteItem(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.service.DeleteItem(r.Context(), userID, productID); err != nil {
-		if errors.Is(err, ErrCartItemNotFound) {
-			httpresponse.NoContent(w)
-			return
-		}
-
-		if errors.Is(err, ErrUserIDIsNil) {
+		switch {
+		case errors.Is(err, ErrUserIDIsNil):
 			httpresponse.Unauthorized(w)
+			return
+		case errors.Is(err, ErrProductIDIsNil):
+			httpresponse.BadRequest(w)
 			return
 		}
 

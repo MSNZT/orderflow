@@ -2,10 +2,12 @@ package cart
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/MSNZT/orderflow/internal/platform/postgres"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 )
 
 type Repository struct {
@@ -86,7 +88,7 @@ func (r *Repository) GetOrCreateByUserID(ctx context.Context, userID uuid.UUID) 
 }
 
 func (r *Repository) GetByUserID(ctx context.Context, userID uuid.UUID) (uuid.UUID, error) {
-	const op = "cart.repository.GetOrCreateByUserID"
+	const op = "cart.repository.GetByUserID"
 
 	query := `
 		SELECT id FROM carts
@@ -97,7 +99,10 @@ func (r *Repository) GetByUserID(ctx context.Context, userID uuid.UUID) (uuid.UU
 
 	var cartID uuid.UUID
 	if err := db.QueryRow(ctx, query, userID).Scan(&cartID); err != nil {
-		return cartID, fmt.Errorf("%s: %w", op, err)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return uuid.Nil, fmt.Errorf("%s: %w", op, ErrCartNotFound)
+		}
+		return uuid.Nil, fmt.Errorf("%s: %w", op, err)
 	}
 
 	return cartID, nil

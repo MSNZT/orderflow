@@ -118,6 +118,10 @@ func (s *Service) UpdateItemQuantity(ctx context.Context, input updateItemQuanti
 		return fmt.Errorf("%s: %w", op, ErrUserIDIsNil)
 	}
 
+	if input.ProductID == uuid.Nil {
+		return fmt.Errorf("%s: %w", op, ErrProductIDIsNil)
+	}
+
 	if input.Quantity <= 0 {
 		return fmt.Errorf("%s: %w", op, ErrQuantityInvalid)
 	}
@@ -150,14 +154,28 @@ func (s *Service) DeleteItem(ctx context.Context, userID uuid.UUID, productID uu
 		return fmt.Errorf("%s: %w", op, ErrUserIDIsNil)
 	}
 
+	if productID == uuid.Nil {
+		return fmt.Errorf("%s: %w", op, ErrProductIDIsNil)
+	}
+
 	err := s.txManager.WithinTx(ctx, func(txCtx context.Context) error {
 		cartID, err := s.repo.GetByUserID(txCtx, userID)
 		if err != nil {
+			if errors.Is(err, ErrCartNotFound) {
+				return nil
+			}
+
 			return err
 		}
+
 		if err = s.repo.DeleteItem(txCtx, cartID, productID); err != nil {
+			if errors.Is(err, ErrCartItemNotFound) {
+				return nil
+			}
+
 			return err
 		}
+
 		return nil
 	})
 
