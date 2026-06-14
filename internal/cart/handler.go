@@ -23,6 +23,11 @@ type listResponse struct {
 	TotalPriceCents int64              `json:"total_price_cents"`
 }
 
+type updateItemQuantityResponse struct {
+	Items           []cartItemResponse `json:"items"`
+	TotalPriceCents int64              `json:"total_price_cents"`
+}
+
 type cartItemResponse struct {
 	ProductID           uuid.UUID `json:"product_id"`
 	Name                string    `json:"name"`
@@ -32,6 +37,11 @@ type cartItemResponse struct {
 }
 
 type addItemRequest struct {
+	ProductID uuid.UUID `json:"product_id"`
+	Quantity  int32     `json:"quantity"`
+}
+
+type updateItemQuantityRequest struct {
 	ProductID uuid.UUID `json:"product_id"`
 	Quantity  int32     `json:"quantity"`
 }
@@ -138,6 +148,65 @@ func (h *Handler) AddItem(w http.ResponseWriter, r *http.Request) {
 	}
 
 	httpresponse.NoContent(w)
+}
+
+func (h *Handler) UpdateItemQuantity(w http.ResponseWriter, r *http.Request) {
+	const op = "cart.handler.UpdateItemQuantity"
+
+	userID, ok := authcontext.UserID(r.Context())
+	if !ok {
+		httpresponse.Error(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	var req updateItemQuantityRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		httpresponse.Error(w, http.StatusBadRequest, "bad request")
+		return
+	}
+
+	input := updateItemQuantityInput{
+		UserID:    userID,
+		ProductID: req.ProductID,
+		Quantity:  req.Quantity,
+	}
+
+	cart, err := h.service.UpdateItemQuantity(r.Context(), input)
+	if err != nil {
+		switch {
+		case errors.Is(err, ErrUserIDIsNil):
+			httpresponse.Error(w, http.StatusUnauthorized, "unauthorized")
+			return
+		case errors.Is(err, ErrProductIDIsNil):
+			httpresponse.Error(w, http.StatusBadRequest, ErrProductIDIsNil.Error())
+			return
+		case errors.Is(err, ErrQuantityInvalid):
+			httpresponse.Error(w, http.StatusUnprocessableEntity, ErrQuantityInvalid.Error())
+			return
+		case errors.Is(err, ErrCartItemNotFound):
+			httpresponse.Error(w, http.StatusNotFound, ErrCartItemNotFound.Error())
+			return
+		default:
+			h.log.Error("failed to update item quantity", slog.String("op", op), slog.String("err", err.Error()))
+			httpresponse.Error(w, http.StatusInternalServerError, "internal server error")
+			return
+		}
+	}
+	cartItems := make([]cartItemResponse, len(cart.Items))
+	for i, item := range cart.Items {
+		cartItems[i] = toCartItemResponse(item)
+	}
+
+	var res = updateItemQuantityResponse{
+		Items:           cartItems,
+		TotalPriceCents: cart.TotalPriceCents,
+	}
+
+	if err := httpresponse.JSON(w, http.StatusOK, res); err != nil {
+		h.log.Error("failed to send updated cart items", slog.String("op", op), slog.String("err", err.Error()))
+		httpresponse.Error(w, http.StatusInternalServerError, "internal server error")
+		return
+	}
 }
 
 func parsePagination(urlValues url.Values, key string) (int32, bool) {

@@ -36,6 +36,12 @@ type addItemInput struct {
 	Quantity  int32
 }
 
+type updateItemQuantityInput struct {
+	UserID    uuid.UUID
+	ProductID uuid.UUID
+	Quantity  int32
+}
+
 func (s *Service) List(ctx context.Context, input listInput) (*Cart, error) {
 	const op = "cart.service.List"
 
@@ -52,21 +58,14 @@ func (s *Service) List(ctx context.Context, input listInput) (*Cart, error) {
 	}
 
 	pageOffset := (input.Page - 1) * input.Limit
-	cartItems, err := s.repo.List(ctx, input.UserID, input.Limit, pageOffset)
+	cartItems, err := s.repo.GetItems(ctx, input.UserID, input.Limit, pageOffset)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", op, err)
 	}
 
-	var totalPriceCents int64
-	for i, item := range cartItems {
-		cartItems[i].LineTotalPriceCents = item.PriceCents * int64(item.Quantity)
-		totalPriceCents += item.PriceCents * int64(item.Quantity)
-	}
+	cartResponse := toCartResponse(cartItems)
 
-	return &Cart{
-		Items:           cartItems,
-		TotalPriceCents: totalPriceCents,
-	}, nil
+	return cartResponse, nil
 }
 
 func (s *Service) AddItem(ctx context.Context, input addItemInput) error {
@@ -110,4 +109,58 @@ func (s *Service) AddItem(ctx context.Context, input addItemInput) error {
 	}
 
 	return nil
+}
+
+func (s *Service) UpdateItemQuantity(ctx context.Context, input updateItemQuantityInput) (*Cart, error) {
+	const op = "cart.service.UpdateItemQuantity"
+
+	if input.UserID == uuid.Nil {
+		return nil, fmt.Errorf("%s: %w", op, ErrUserIDIsNil)
+	}
+
+	if input.ProductID == uuid.Nil {
+		return nil, fmt.Errorf("%s: %w", op, ErrProductIDIsNil)
+	}
+
+	if input.Quantity <= 0 {
+		return nil, fmt.Errorf("%s: %w", op, ErrQuantityInvalid)
+	}
+
+	var cart *Cart
+
+	err := s.txManager.WithinTx(ctx, func(txCtx context.Context) error {
+		cartID, err := s.repo.GetOrCreateByUserID(txCtx, input.UserID)
+		if err != nil {
+			return err
+		}
+
+		err = s.repo.UpdateItemQuantity(txCtx, cartID, input.ProductID, input.Quantity)
+		if err != nil {
+			return err
+		}
+
+		cartItems, err := s.repo.GetItems(txCtx, input.UserID, int32(100), int32(0))
+
+		cart = toCartResponse(cartItems)
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", op, err)
+	}
+
+	return cart, nil
+}
+
+func toCartResponse(cartItems []CartItem) *Cart {
+	var totalPriceCents int64
+	for _, item := range cartItems {
+		totalPriceCents += item.PriceCents * int64(item.Quantity)
+	}
+
+	return &Cart{
+		Items:           cartItems,
+		TotalPriceCents: totalPriceCents,
+	}
 }
