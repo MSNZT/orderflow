@@ -19,7 +19,7 @@ func NewRepository(db postgres.DBTX) *Repository {
 }
 
 func (r *Repository) GetItems(ctx context.Context, userId uuid.UUID, limit int32, offset int32) ([]CartItem, error) {
-	const op = "cart.repository.List"
+	const op = "cart.repository.GetItems"
 
 	query := `
 		SELECT 
@@ -184,7 +184,6 @@ func (r *Repository) DeleteItem(ctx context.Context, cartID uuid.UUID, productID
 	}
 
 	if res.RowsAffected() == 0 {
-		fmt.Println("remove=======")
 		return fmt.Errorf("%s: %w", op, ErrCartItemNotFound)
 	}
 

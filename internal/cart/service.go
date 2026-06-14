@@ -43,7 +43,7 @@ type updateItemQuantityInput struct {
 }
 
 func (s *Service) GetItems(ctx context.Context, input getItemsInput) (*Cart, error) {
-	const op = "cart.service.List"
+	const op = "cart.service.GetItems"
 
 	if input.UserID == uuid.Nil {
 		return nil, fmt.Errorf("%s: %w", op, ErrUserIDIsNil)
@@ -129,6 +129,9 @@ func (s *Service) UpdateItemQuantity(ctx context.Context, input updateItemQuanti
 	err := s.txManager.WithinTx(ctx, func(txCtx context.Context) error {
 		cartID, err := s.repo.GetByUserID(txCtx, input.UserID)
 		if err != nil {
+			if errors.Is(err, ErrCartNotFound) {
+				return ErrCartItemNotFound
+			}
 			return err
 		}
 

@@ -46,7 +46,7 @@ func NewHandler(log *slog.Logger, service *Service) *Handler {
 }
 
 func (h *Handler) GetItems(w http.ResponseWriter, r *http.Request) {
-	const op = "cart.handler.List"
+	const op = "cart.handler.GetItems"
 
 	userId, ok := authcontext.UserID(r.Context())
 	if !ok {
@@ -177,6 +177,9 @@ func (h *Handler) UpdateItemQuantity(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case errors.Is(err, ErrUserIDIsNil):
 			httpresponse.Unauthorized(w)
+			return
+		case errors.Is(err, ErrProductIDIsNil):
+			httpresponse.BadRequest(w)
 			return
 		case errors.Is(err, ErrQuantityInvalid):
 			httpresponse.Error(w, http.StatusUnprocessableEntity, ErrQuantityInvalid.Error())
