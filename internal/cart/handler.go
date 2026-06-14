@@ -10,6 +10,7 @@ import (
 
 	"github.com/MSNZT/orderflow/internal/authcontext"
 	"github.com/MSNZT/orderflow/internal/httpresponse"
+	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 )
 
@@ -19,11 +20,6 @@ type Handler struct {
 }
 
 type listResponse struct {
-	Items           []cartItemResponse `json:"items"`
-	TotalPriceCents int64              `json:"total_price_cents"`
-}
-
-type updateItemQuantityResponse struct {
 	Items           []cartItemResponse `json:"items"`
 	TotalPriceCents int64              `json:"total_price_cents"`
 }
@@ -42,50 +38,49 @@ type addItemRequest struct {
 }
 
 type updateItemQuantityRequest struct {
-	ProductID uuid.UUID `json:"product_id"`
-	Quantity  int32     `json:"quantity"`
+	Quantity int32 `json:"quantity"`
 }
 
 func NewHandler(log *slog.Logger, service *Service) *Handler {
 	return &Handler{log: log, service: service}
 }
 
-func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) GetItems(w http.ResponseWriter, r *http.Request) {
 	const op = "cart.handler.List"
 
 	userId, ok := authcontext.UserID(r.Context())
 	if !ok {
-		httpresponse.Error(w, http.StatusUnauthorized, "unauthorized")
+		httpresponse.Unauthorized(w)
 		return
 	}
 
 	queryParams := r.URL.Query()
 	page, ok := parsePagination(queryParams, "page")
 	if !ok {
-		httpresponse.Error(w, http.StatusBadRequest, "invalid query params")
+		httpresponse.BadRequestMsg(w, "invalid query params")
 		return
 	}
 	limit, ok := parsePagination(queryParams, "limit")
 	if !ok {
-		httpresponse.Error(w, http.StatusBadRequest, "invalid query params")
+		httpresponse.BadRequestMsg(w, "invalid query params")
 		return
 	}
 
-	input := listInput{
+	input := getItemsInput{
 		UserID: userId,
 		Page:   page,
 		Limit:  limit,
 	}
 
-	cart, err := h.service.List(r.Context(), input)
+	cart, err := h.service.GetItems(r.Context(), input)
 	if err != nil {
 		switch {
 		case errors.Is(err, ErrUserIDIsNil):
-			httpresponse.Error(w, http.StatusUnauthorized, "unauthorized")
+			httpresponse.Unauthorized(w)
 			return
 		default:
 			h.log.Error("failed to get cart items", slog.String("op", op), slog.String("err", err.Error()))
-			httpresponse.Error(w, http.StatusInternalServerError, "internal server error")
+			httpresponse.InternalError(w)
 			return
 		}
 	}
@@ -110,13 +105,13 @@ func (h *Handler) AddItem(w http.ResponseWriter, r *http.Request) {
 
 	userID, ok := authcontext.UserID(r.Context())
 	if !ok {
-		httpresponse.Error(w, http.StatusUnauthorized, "unauthorized")
+		httpresponse.Unauthorized(w)
 		return
 	}
 
 	var req addItemRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		httpresponse.Error(w, http.StatusBadRequest, "bad request")
+		httpresponse.BadRequest(w)
 		return
 	}
 
@@ -129,7 +124,7 @@ func (h *Handler) AddItem(w http.ResponseWriter, r *http.Request) {
 	if err := h.service.AddItem(r.Context(), input); err != nil {
 		switch {
 		case errors.Is(err, ErrUserIDIsNil):
-			httpresponse.Error(w, http.StatusUnauthorized, "unauthorized")
+			httpresponse.Unauthorized(w)
 			return
 		case errors.Is(err, ErrProductIDIsNil):
 			httpresponse.Error(w, http.StatusBadRequest, ErrProductIDIsNil.Error())
@@ -142,7 +137,7 @@ func (h *Handler) AddItem(w http.ResponseWriter, r *http.Request) {
 			return
 		default:
 			h.log.Error("failed to add item to cart items", slog.String("op", op), slog.String("err", err.Error()))
-			httpresponse.Error(w, http.StatusInternalServerError, "internal server error")
+			httpresponse.InternalError(w)
 			return
 		}
 	}
@@ -153,32 +148,35 @@ func (h *Handler) AddItem(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) UpdateItemQuantity(w http.ResponseWriter, r *http.Request) {
 	const op = "cart.handler.UpdateItemQuantity"
 
+	url := chi.URLParam(r, "productID")
+	productID, err := uuid.Parse(url)
+	if err != nil {
+		httpresponse.BadRequest(w)
+		return
+	}
+
 	userID, ok := authcontext.UserID(r.Context())
 	if !ok {
-		httpresponse.Error(w, http.StatusUnauthorized, "unauthorized")
+		httpresponse.Unauthorized(w)
 		return
 	}
 
 	var req updateItemQuantityRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		httpresponse.Error(w, http.StatusBadRequest, "bad request")
+		httpresponse.BadRequest(w)
 		return
 	}
 
 	input := updateItemQuantityInput{
 		UserID:    userID,
-		ProductID: req.ProductID,
+		ProductID: productID,
 		Quantity:  req.Quantity,
 	}
 
-	cart, err := h.service.UpdateItemQuantity(r.Context(), input)
-	if err != nil {
+	if err := h.service.UpdateItemQuantity(r.Context(), input); err != nil {
 		switch {
 		case errors.Is(err, ErrUserIDIsNil):
-			httpresponse.Error(w, http.StatusUnauthorized, "unauthorized")
-			return
-		case errors.Is(err, ErrProductIDIsNil):
-			httpresponse.Error(w, http.StatusBadRequest, ErrProductIDIsNil.Error())
+			httpresponse.Unauthorized(w)
 			return
 		case errors.Is(err, ErrQuantityInvalid):
 			httpresponse.Error(w, http.StatusUnprocessableEntity, ErrQuantityInvalid.Error())
@@ -188,25 +186,47 @@ func (h *Handler) UpdateItemQuantity(w http.ResponseWriter, r *http.Request) {
 			return
 		default:
 			h.log.Error("failed to update item quantity", slog.String("op", op), slog.String("err", err.Error()))
-			httpresponse.Error(w, http.StatusInternalServerError, "internal server error")
+			httpresponse.InternalError(w)
 			return
 		}
 	}
-	cartItems := make([]cartItemResponse, len(cart.Items))
-	for i, item := range cart.Items {
-		cartItems[i] = toCartItemResponse(item)
-	}
 
-	var res = updateItemQuantityResponse{
-		Items:           cartItems,
-		TotalPriceCents: cart.TotalPriceCents,
-	}
+	httpresponse.NoContent(w)
+}
 
-	if err := httpresponse.JSON(w, http.StatusOK, res); err != nil {
-		h.log.Error("failed to send updated cart items", slog.String("op", op), slog.String("err", err.Error()))
-		httpresponse.Error(w, http.StatusInternalServerError, "internal server error")
+func (h *Handler) DeleteItem(w http.ResponseWriter, r *http.Request) {
+	const op = "cart.handler.DeleteItem"
+
+	userID, ok := authcontext.UserID(r.Context())
+	if !ok {
+		httpresponse.Unauthorized(w)
 		return
 	}
+
+	url := chi.URLParam(r, "productID")
+	productID, err := uuid.Parse(url)
+	if err != nil {
+		httpresponse.BadRequest(w)
+		return
+	}
+
+	if err := h.service.DeleteItem(r.Context(), userID, productID); err != nil {
+		if errors.Is(err, ErrCartItemNotFound) {
+			httpresponse.NoContent(w)
+			return
+		}
+
+		if errors.Is(err, ErrUserIDIsNil) {
+			httpresponse.Unauthorized(w)
+			return
+		}
+
+		h.log.Error("failed to delete cart item", slog.String("op", op), slog.String("err", err.Error()))
+		httpresponse.InternalError(w)
+		return
+	}
+
+	httpresponse.NoContent(w)
 }
 
 func parsePagination(urlValues url.Values, key string) (int32, bool) {

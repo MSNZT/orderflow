@@ -85,6 +85,24 @@ func (r *Repository) GetOrCreateByUserID(ctx context.Context, userID uuid.UUID) 
 	return cartID, nil
 }
 
+func (r *Repository) GetByUserID(ctx context.Context, userID uuid.UUID) (uuid.UUID, error) {
+	const op = "cart.repository.GetOrCreateByUserID"
+
+	query := `
+		SELECT id FROM carts
+		WHERE user_id = $1
+	`
+
+	db := postgres.ExecutorFromContext(ctx, r.db)
+
+	var cartID uuid.UUID
+	if err := db.QueryRow(ctx, query, userID).Scan(&cartID); err != nil {
+		return cartID, fmt.Errorf("%s: %w", op, err)
+	}
+
+	return cartID, nil
+}
+
 func (r *Repository) AddItem(ctx context.Context, cartID uuid.UUID, productID uuid.UUID, quantity int32) error {
 	const op = "cart.repository.AddItem"
 
@@ -118,15 +136,11 @@ func (r *Repository) UpdateItemQuantity(
 				updated_at = now()
 			WHERE cart_id = $1 
 			  AND product_id = $2 
-			  AND quantity != $3
 			RETURNING cart_id, product_id
-		),
-		updated_cart AS (
-			UPDATE carts
-			SET updated_at = now()
-			WHERE id = (SELECT cart_id FROM updated_item)
 		)
-		SELECT 1;
+		UPDATE carts
+		SET updated_at = now()
+		WHERE id = (SELECT cart_id FROM updated_item)
 	`
 
 	db := postgres.ExecutorFromContext(ctx, r.db)
@@ -144,7 +158,7 @@ func (r *Repository) UpdateItemQuantity(
 }
 
 func (r *Repository) DeleteItem(ctx context.Context, cartID uuid.UUID, productID uuid.UUID) error {
-	const op = "cart.repository.UpdateItemQuantity"
+	const op = "cart.repository.DeleteItem"
 
 	query := `
 		WITH deleted AS (
@@ -165,6 +179,7 @@ func (r *Repository) DeleteItem(ctx context.Context, cartID uuid.UUID, productID
 	}
 
 	if res.RowsAffected() == 0 {
+		fmt.Println("remove=======")
 		return fmt.Errorf("%s: %w", op, ErrCartItemNotFound)
 	}
 

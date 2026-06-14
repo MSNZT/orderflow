@@ -24,7 +24,7 @@ func NewService(repo *Repository, txManager *postgres.TxManager, productService 
 	return &Service{repo: repo, txManager: txManager, productsService: productService}
 }
 
-type listInput struct {
+type getItemsInput struct {
 	UserID uuid.UUID
 	Limit  int32
 	Page   int32
@@ -42,7 +42,7 @@ type updateItemQuantityInput struct {
 	Quantity  int32
 }
 
-func (s *Service) List(ctx context.Context, input listInput) (*Cart, error) {
+func (s *Service) GetItems(ctx context.Context, input getItemsInput) (*Cart, error) {
 	const op = "cart.service.List"
 
 	if input.UserID == uuid.Nil {
@@ -111,25 +111,19 @@ func (s *Service) AddItem(ctx context.Context, input addItemInput) error {
 	return nil
 }
 
-func (s *Service) UpdateItemQuantity(ctx context.Context, input updateItemQuantityInput) (*Cart, error) {
+func (s *Service) UpdateItemQuantity(ctx context.Context, input updateItemQuantityInput) error {
 	const op = "cart.service.UpdateItemQuantity"
 
 	if input.UserID == uuid.Nil {
-		return nil, fmt.Errorf("%s: %w", op, ErrUserIDIsNil)
-	}
-
-	if input.ProductID == uuid.Nil {
-		return nil, fmt.Errorf("%s: %w", op, ErrProductIDIsNil)
+		return fmt.Errorf("%s: %w", op, ErrUserIDIsNil)
 	}
 
 	if input.Quantity <= 0 {
-		return nil, fmt.Errorf("%s: %w", op, ErrQuantityInvalid)
+		return fmt.Errorf("%s: %w", op, ErrQuantityInvalid)
 	}
 
-	var cart *Cart
-
 	err := s.txManager.WithinTx(ctx, func(txCtx context.Context) error {
-		cartID, err := s.repo.GetOrCreateByUserID(txCtx, input.UserID)
+		cartID, err := s.repo.GetByUserID(txCtx, input.UserID)
 		if err != nil {
 			return err
 		}
@@ -139,24 +133,45 @@ func (s *Service) UpdateItemQuantity(ctx context.Context, input updateItemQuanti
 			return err
 		}
 
-		cartItems, err := s.repo.GetItems(txCtx, input.UserID, int32(100), int32(0))
-
-		cart = toCartResponse(cartItems)
-
 		return nil
 	})
 
 	if err != nil {
-		return nil, fmt.Errorf("%s: %w", op, err)
+		return fmt.Errorf("%s: %w", op, err)
 	}
 
-	return cart, nil
+	return nil
+}
+
+func (s *Service) DeleteItem(ctx context.Context, userID uuid.UUID, productID uuid.UUID) error {
+	const op = "cart.service.DeleteItem"
+
+	if userID == uuid.Nil {
+		return fmt.Errorf("%s: %w", op, ErrUserIDIsNil)
+	}
+
+	err := s.txManager.WithinTx(ctx, func(txCtx context.Context) error {
+		cartID, err := s.repo.GetByUserID(txCtx, userID)
+		if err != nil {
+			return err
+		}
+		if err = s.repo.DeleteItem(txCtx, cartID, productID); err != nil {
+			return err
+		}
+		return nil
+	})
+
+	if err != nil {
+		return fmt.Errorf("%s: %w", op, err)
+	}
+
+	return nil
 }
 
 func toCartResponse(cartItems []CartItem) *Cart {
 	var totalPriceCents int64
 	for _, item := range cartItems {
-		totalPriceCents += item.PriceCents * int64(item.Quantity)
+		totalPriceCents += item.LineTotalPriceCents
 	}
 
 	return &Cart{

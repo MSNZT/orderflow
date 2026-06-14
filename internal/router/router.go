@@ -60,9 +60,10 @@ func NewRouter(log *slog.Logger, tokenParser httpmiddleware.TokenParser, deps Ro
 			r.Group(func(r chi.Router) {
 				r.Use(httpmiddleware.Auth(tokenParser))
 
-				r.Get("/", deps.CartHandler.List)
+				r.Get("/", deps.CartHandler.GetItems)
 				r.Post("/items", deps.CartHandler.AddItem)
-				r.Patch("/items", deps.CartHandler.UpdateItemQuantity)
+				r.Patch("/items/{productID}", deps.CartHandler.UpdateItemQuantity)
+				r.Delete("/items/{productID}", deps.CartHandler.DeleteItem)
 			})
 		})
 	})
