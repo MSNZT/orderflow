@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/MSNZT/orderflow/internal/auth"
+	"github.com/MSNZT/orderflow/internal/cart"
 	"github.com/MSNZT/orderflow/internal/health"
 	"github.com/MSNZT/orderflow/internal/httpmiddleware"
 	"github.com/MSNZT/orderflow/internal/products"
@@ -16,6 +17,7 @@ import (
 type RouterDependencies struct {
 	AuthHandler     *auth.Handler
 	ProductsHandler *products.Handler
+	CartHandler     *cart.Handler
 	HealthHandler   *health.Handler
 }
 
@@ -51,6 +53,18 @@ func NewRouter(log *slog.Logger, tokenParser httpmiddleware.TokenParser, deps Ro
 				r.Use(httpmiddleware.RequireRole(users.RoleManager, users.RoleAdmin))
 
 				r.Post("/", deps.ProductsHandler.Create)
+			})
+		})
+
+		r.Route("/cart", func(r chi.Router) {
+			r.Group(func(r chi.Router) {
+				r.Use(httpmiddleware.Auth(tokenParser))
+
+				r.Get("/", deps.CartHandler.GetItems)
+				r.Post("/items", deps.CartHandler.AddItem)
+				r.Patch("/items/{productID}", deps.CartHandler.UpdateItemQuantity)
+				r.Delete("/items/{productID}", deps.CartHandler.DeleteItem)
+				r.Delete("/items", deps.CartHandler.ClearItems)
 			})
 		})
 	})

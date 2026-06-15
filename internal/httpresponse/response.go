@@ -28,6 +28,25 @@ func Error(w http.ResponseWriter, statusCode int, message string) error {
 	})
 }
 
+func BadRequest(w http.ResponseWriter) {
+	Error(w, http.StatusBadRequest, "bad request")
+}
+
+func BadRequestMsg(w http.ResponseWriter, message string) {
+	if message == "" {
+		message = "bad request"
+	}
+	Error(w, http.StatusBadRequest, message)
+}
+
+func Unauthorized(w http.ResponseWriter) {
+	Error(w, http.StatusUnauthorized, "unauthorized")
+}
+
+func InternalError(w http.ResponseWriter) {
+	Error(w, http.StatusInternalServerError, "internal server error")
+}
+
 func NoContent(w http.ResponseWriter) {
 	w.WriteHeader(http.StatusNoContent)
 }
