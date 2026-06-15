@@ -26,8 +26,8 @@ func NewService(repo *Repository, txManager *postgres.TxManager, productService 
 
 type getItemsInput struct {
 	UserID uuid.UUID
-	Limit  int32
-	Page   int32
+	Limit  int
+	Page   int
 }
 
 type addItemInput struct {
@@ -47,14 +47,6 @@ func (s *Service) GetItems(ctx context.Context, input getItemsInput) (*Cart, err
 
 	if input.UserID == uuid.Nil {
 		return nil, fmt.Errorf("%s: %w", op, ErrUserIDIsNil)
-	}
-
-	if input.Limit <= 0 {
-		input.Limit = 20
-	}
-
-	if input.Page <= 0 {
-		input.Page = 1
 	}
 
 	pageOffset := (input.Page - 1) * input.Limit
@@ -179,6 +171,38 @@ func (s *Service) DeleteItem(ctx context.Context, userID uuid.UUID, productID uu
 			return err
 		}
 
+		return nil
+	})
+
+	if err != nil {
+		return fmt.Errorf("%s: %w", op, err)
+	}
+
+	return nil
+}
+
+func (s *Service) ClearItems(ctx context.Context, userID uuid.UUID) error {
+	const op = "cart.service.ClearItems"
+
+	if userID == uuid.Nil {
+		return fmt.Errorf("%s: %w", op, ErrUserIDIsNil)
+	}
+
+	err := s.txManager.WithinTx(ctx, func(txCtx context.Context) error {
+		cartID, err := s.repo.GetByUserID(txCtx, userID)
+		if err != nil {
+			if errors.Is(err, ErrCartNotFound) {
+				return nil
+			}
+			return err
+		}
+
+		if err = s.repo.ClearItems(txCtx, cartID); err != nil {
+			if errors.Is(err, ErrCartNotFound) {
+				return nil
+			}
+			return err
+		}
 		return nil
 	})
 

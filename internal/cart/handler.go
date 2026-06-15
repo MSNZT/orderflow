@@ -41,6 +41,12 @@ type updateItemQuantityRequest struct {
 	Quantity int32 `json:"quantity"`
 }
 
+const (
+	defaultCartLimit = 20
+	maxCartLimit     = 100
+	defaultCartPage  = 1
+)
+
 func NewHandler(log *slog.Logger, service *Service) *Handler {
 	return &Handler{log: log, service: service}
 }
@@ -48,7 +54,7 @@ func NewHandler(log *slog.Logger, service *Service) *Handler {
 func (h *Handler) GetItems(w http.ResponseWriter, r *http.Request) {
 	const op = "cart.handler.GetItems"
 
-	userId, ok := authcontext.UserID(r.Context())
+	userID, ok := authcontext.UserID(r.Context())
 	if !ok {
 		httpresponse.Unauthorized(w)
 		return
@@ -60,14 +66,27 @@ func (h *Handler) GetItems(w http.ResponseWriter, r *http.Request) {
 		httpresponse.BadRequestMsg(w, "invalid query params")
 		return
 	}
+
+	if page < defaultCartPage {
+		page = defaultCartPage
+	}
+
 	limit, ok := parsePagination(queryParams, "limit")
 	if !ok {
 		httpresponse.BadRequestMsg(w, "invalid query params")
 		return
 	}
 
+	if limit <= 0 {
+		limit = defaultCartLimit
+	}
+
+	if limit > maxCartLimit {
+		limit = maxCartLimit
+	}
+
 	input := getItemsInput{
-		UserID: userId,
+		UserID: userID,
 		Page:   page,
 		Limit:  limit,
 	}
@@ -231,17 +250,44 @@ func (h *Handler) DeleteItem(w http.ResponseWriter, r *http.Request) {
 	httpresponse.NoContent(w)
 }
 
-func parsePagination(urlValues url.Values, key string) (int32, bool) {
+func (h *Handler) ClearItems(w http.ResponseWriter, r *http.Request) {
+	const op = "cart.handler.ClearItems"
+
+	userID, ok := authcontext.UserID(r.Context())
+	if !ok {
+		httpresponse.Unauthorized(w)
+		return
+	}
+
+	if err := h.service.ClearItems(r.Context(), userID); err != nil {
+		if errors.Is(err, ErrUserIDIsNil) {
+			httpresponse.Unauthorized(w)
+			return
+		}
+		h.log.Error("failed to clear cart items", slog.String("op", op), slog.String("err", err.Error()))
+		httpresponse.InternalError(w)
+		return
+	}
+
+	httpresponse.NoContent(w)
+}
+
+func parsePagination(urlValues url.Values, key string) (int, bool) {
 	str := urlValues.Get(key)
 	if str == "" {
-		return int32(0), true
+		return 0, true
 	}
 
 	v, err := strconv.ParseInt(str, 10, 32)
-	if err != nil || v < 0 {
-		return int32(0), false
+	if err != nil {
+		return 0, false
 	}
-	return int32(v), true
+
+	if v < 0 {
+		return 0, true
+	}
+
+	return int(v), true
 }
 
 func toCartItemResponse(item CartItem) cartItemResponse {

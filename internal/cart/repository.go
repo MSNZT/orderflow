@@ -18,7 +18,7 @@ func NewRepository(db postgres.DBTX) *Repository {
 	return &Repository{db: db}
 }
 
-func (r *Repository) GetItems(ctx context.Context, userId uuid.UUID, limit int32, offset int32) ([]CartItem, error) {
+func (r *Repository) GetItems(ctx context.Context, userId uuid.UUID, limit int, offset int) ([]CartItem, error) {
 	const op = "cart.repository.GetItems"
 
 	query := `
@@ -185,6 +185,39 @@ func (r *Repository) DeleteItem(ctx context.Context, cartID uuid.UUID, productID
 
 	if res.RowsAffected() == 0 {
 		return fmt.Errorf("%s: %w", op, ErrCartItemNotFound)
+	}
+
+	return nil
+}
+
+func (r *Repository) ClearItems(ctx context.Context, cartID uuid.UUID) error {
+	const op = "cart.repository.ClearItems"
+
+	deleteQuery := `
+		DELETE FROM cart_items 
+		WHERE cart_id = $1
+	`
+
+	updateQuery := `
+		UPDATE carts
+		SET updated_at = now()
+		WHERE id = $1
+	`
+
+	db := postgres.ExecutorFromContext(ctx, r.db)
+
+	_, err := db.Exec(ctx, deleteQuery, cartID)
+	if err != nil {
+		return fmt.Errorf("%s: %w", op, err)
+	}
+
+	res, err := db.Exec(ctx, updateQuery, cartID)
+	if err != nil {
+		return fmt.Errorf("%s: %w", op, err)
+	}
+
+	if res.RowsAffected() == 0 {
+		return fmt.Errorf("%s: %w", op, ErrCartNotFound)
 	}
 
 	return nil

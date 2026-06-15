@@ -64,6 +64,7 @@ func NewRouter(log *slog.Logger, tokenParser httpmiddleware.TokenParser, deps Ro
 				r.Post("/items", deps.CartHandler.AddItem)
 				r.Patch("/items/{productID}", deps.CartHandler.UpdateItemQuantity)
 				r.Delete("/items/{productID}", deps.CartHandler.DeleteItem)
+				r.Delete("/items", deps.CartHandler.ClearItems)
 			})
 		})
 	})
