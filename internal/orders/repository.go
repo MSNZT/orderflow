@@ -48,7 +48,7 @@ func (r *Repository) CreateOrderItems(ctx context.Context, orderItems []OrderIte
 
 	identifier := pgx.Identifier{"order_items"}
 	columns := []string{"id", "order_id", "product_id", "product_name", "unit_price_cents",
-		"currency", "quantity", "total_price_cents",
+		"currency", "quantity", "line_total_price_cents",
 	}
 
 	db := postgres.ExecutorFromContext(ctx, r.db)

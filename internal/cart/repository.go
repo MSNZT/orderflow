@@ -233,7 +233,7 @@ func (r *Repository) GetSelectedItemsForCheckout(ctx context.Context, cartID uui
 			p.is_active
 		FROM cart_items ci
 		JOIN products p ON p.id = ci.product_id
-		WHERE ci.cart_id = $1 AND ci.product_id = ANY($2)
+		WHERE ci.cart_id = $1 AND ci.product_id = ANY($2);
 	`
 
 	db := postgres.ExecutorFromContext(ctx, r.db)
