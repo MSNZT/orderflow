@@ -4,8 +4,8 @@ CREATE TABLE orders (
     status TEXT NOT NULL DEFAULT 'pending',
     total_price_cents BIGINT NOT NULL,
     currency TEXT NOT NULL,
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
 
     CONSTRAINT chk_orders_total_price_cents CHECK (total_price_cents >= 0),
     CONSTRAINT chk_orders_status CHECK (status IN ('pending', 'paid', 'cancelled')),
@@ -24,13 +24,13 @@ CREATE TABLE order_items (
     unit_price_cents BIGINT NOT NULL,
     currency TEXT NOT NULL,
     quantity INT NOT NULL,
-    total_price_cents BIGINT NOT NULL,
+    line_total_price_cents BIGINT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
 
     CONSTRAINT chk_order_item_unit_price_cents CHECK (unit_price_cents > 0),
     CONSTRAINT chk_order_item_quantity CHECK (quantity > 0),
-    CONSTRAINT chk_order_item_total_price_cents CHECK (total_price_cents > 0),
-    CONSTRAINT chk_order_items_total_price_matches CHECK (total_price_cents = unit_price_cents * quantity),
+    CONSTRAINT chk_order_item_line_total_price_cents CHECK (line_total_price_cents > 0),
+    CONSTRAINT chk_order_items_line_total_price_matches CHECK (line_total_price_cents = unit_price_cents * quantity),
     CONSTRAINT chk_order_item_currency CHECK (currency <> ''),
     CONSTRAINT chk_order_item_product_name CHECK (product_name <> ''),
 

@@ -6,13 +6,13 @@ import (
 	"github.com/google/uuid"
 )
 
-const (
-	orderStatusPending   = "pending"
-	orderStatusPaid      = "paid"
-	orderStatusCancelled = "cancelled"
-)
-
 type Status string
+
+const (
+	StatusPending   Status = "pending"
+	StatusPaid      Status = "paid"
+	StatusCancelled Status = "cancelled"
+)
 
 type Order struct {
 	ID              uuid.UUID
@@ -24,14 +24,14 @@ type Order struct {
 	CreatedAt       time.Time
 }
 
-type OrderItems struct {
-	ID              uuid.UUID
-	OrderID         uuid.UUID
-	ProductID       uuid.UUID
-	ProductName     string
-	UnitPriceCents  int64
-	Currency        string
-	Quantity        int
-	TotalPriceCents int64
-	CreatedAt       time.Time
+type OrderItem struct {
+	ID                  uuid.UUID
+	OrderID             uuid.UUID
+	ProductID           uuid.UUID
+	ProductName         string
+	UnitPriceCents      int64
+	Currency            string
+	Quantity            int
+	LineTotalPriceCents int64
+	CreatedAt           time.Time
 }
