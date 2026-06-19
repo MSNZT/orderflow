@@ -233,7 +233,8 @@ func (r *Repository) GetSelectedItemsForCheckout(ctx context.Context, cartID uui
 			p.is_active
 		FROM cart_items ci
 		JOIN products p ON p.id = ci.product_id
-		WHERE ci.cart_id = $1 AND ci.product_id = ANY($2);
+		WHERE ci.cart_id = $1 AND ci.product_id = ANY($2)
+		FOR UPDATE OF ci;
 	`
 
 	db := postgres.ExecutorFromContext(ctx, r.db)
@@ -265,4 +266,41 @@ func (r *Repository) GetSelectedItemsForCheckout(ctx context.Context, cartID uui
 	}
 
 	return checkoutItems, nil
+}
+
+func (r *Repository) DeleteSelectedItems(ctx context.Context, cartID uuid.UUID, productIDs []uuid.UUID) (int64, error) {
+	const op = "cart.repository.DeleteSelectedItems"
+
+	if len(productIDs) == 0 {
+		return 0, nil
+	}
+
+	deleteQuery := `
+		DELETE FROM cart_items
+		WHERE cart_id = $1 AND product_id = ANY($2)
+	`
+
+	updateQuery := `
+		UPDATE carts
+		SET updated_at = now()
+		WHERE id = $1
+	`
+
+	db := postgres.ExecutorFromContext(ctx, r.db)
+
+	resDelete, err := db.Exec(ctx, deleteQuery, cartID)
+	if err != nil {
+		return 0, fmt.Errorf("%s: %w", op, err)
+	}
+
+	res, err := db.Exec(ctx, updateQuery, cartID)
+	if err != nil {
+		return 0, fmt.Errorf("%s: %w", op, err)
+	}
+
+	if res.RowsAffected() == 0 {
+		return 0, fmt.Errorf("%s: %w", op, ErrCartNotFound)
+	}
+
+	return resDelete.RowsAffected(), nil
 }

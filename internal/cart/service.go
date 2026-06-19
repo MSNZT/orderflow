@@ -240,6 +240,34 @@ func (s *Service) GetSelectedItemsForCheckout(ctx context.Context, userID uuid.U
 	return checkoutItems, nil
 }
 
+func (s *Service) DeleteSelectedItems(ctx context.Context, userID uuid.UUID, productIDs []uuid.UUID) error {
+	const op = "cart.service.DeleteSelectedItems"
+
+	if userID == uuid.Nil {
+		return fmt.Errorf("%s: %w", op, ErrUserIDIsNil)
+	}
+
+	if len(productIDs) == 0 {
+		return nil
+	}
+
+	cartID, err := s.repo.GetByUserID(ctx, userID)
+	if err != nil {
+		return fmt.Errorf("%s: %w", op, ErrCartNotFound)
+	}
+
+	deleteCount, err := s.repo.DeleteSelectedItems(ctx, cartID, productIDs)
+	if err != nil {
+		return fmt.Errorf("%s: %w", op, err)
+	}
+
+	if deleteCount != int64(len(productIDs)) {
+		return fmt.Errorf("%s: %w", op, ErrCartItemNotFound)
+	}
+
+	return nil
+}
+
 func toCartResponse(cartItems []CartItem) *Cart {
 	var totalPriceCents int64
 	for _, item := range cartItems {

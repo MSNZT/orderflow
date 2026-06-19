@@ -96,7 +96,7 @@ func (r *Repository) GetByProductIDsForUpdate(ctx context.Context, productIDs []
 		return nil, fmt.Errorf("%s: %w", op, err)
 	}
 
-	var inventories = make([]Inventory, 0)
+	var inventories = make([]Inventory, 0, len(productIDs))
 
 	for rows.Next() {
 		var inv Inventory
@@ -119,6 +119,10 @@ func (r *Repository) GetByProductIDsForUpdate(ctx context.Context, productIDs []
 
 func (r *Repository) DecreaseQuantity(ctx context.Context, productID uuid.UUID, requestedQuantity int) error {
 	const op = "inventory.repository.DecreaseQuantity"
+
+	if requestedQuantity <= 0 {
+		return fmt.Errorf("%s: %w", op, ErrInventoryQuantityInvalid)
+	}
 
 	query := `
 		UPDATE product_inventory
