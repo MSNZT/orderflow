@@ -110,6 +110,8 @@ func (r *Repository) GetByProductIDsForUpdate(ctx context.Context, productIDs []
 		inventories = append(inventories, inv)
 	}
 
+	defer rows.Close()
+
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("%s: %w", op, err)
 	}

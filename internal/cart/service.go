@@ -253,7 +253,7 @@ func (s *Service) DeleteSelectedItems(ctx context.Context, userID uuid.UUID, pro
 
 	cartID, err := s.repo.GetByUserID(ctx, userID)
 	if err != nil {
-		return fmt.Errorf("%s: %w", op, ErrCartNotFound)
+		return fmt.Errorf("%s: %w", op, err)
 	}
 
 	deleteCount, err := s.repo.DeleteSelectedItems(ctx, cartID, productIDs)

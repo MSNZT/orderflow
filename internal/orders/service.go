@@ -29,6 +29,14 @@ type Service struct {
 	txManager     *postgres.TxManager
 }
 
+func NewService(
+	repo *Repository,
+	inventoryRepo InventoryRepository,
+	cartService CartProvider,
+	txManager *postgres.TxManager) *Service {
+	return &Service{repo: repo, inventoryRepo: inventoryRepo, cartService: cartService, txManager: txManager}
+}
+
 func (s *Service) CreateOrder(ctx context.Context, userID uuid.UUID, productsIDs []uuid.UUID) (*Order, error) {
 	const op = "orders.service.CreateOrder"
 
@@ -58,6 +66,8 @@ func (s *Service) CreateOrder(ctx context.Context, userID uuid.UUID, productsIDs
 		uniqueIDs[id] = struct{}{}
 	}
 
+	var order Order
+
 	err := s.txManager.WithinTx(ctx, func(txCtx context.Context) error {
 		lenProductsIDs := len(productsIDs)
 
@@ -71,6 +81,7 @@ func (s *Service) CreateOrder(ctx context.Context, userID uuid.UUID, productsIDs
 		}
 
 		var totalPriceCents int64
+		var currency Currency = Currency(selectedItems[0].Currency)
 
 		for _, selectedItem := range selectedItems {
 			if !selectedItem.IsProductActive {
@@ -79,6 +90,10 @@ func (s *Service) CreateOrder(ctx context.Context, userID uuid.UUID, productsIDs
 
 			if selectedItem.Quantity <= 0 {
 				return ErrCartChanged
+			}
+
+			if currency != Currency(selectedItem.Currency) {
+				return ErrCurrencyMismatch
 			}
 
 			totalPriceCents += int64(selectedItem.LineTotalPriceCents)
@@ -92,6 +107,8 @@ func (s *Service) CreateOrder(ctx context.Context, userID uuid.UUID, productsIDs
 		if len(inventories) < lenProductsIDs {
 			return ErrInventoryNotFound
 		}
+
+		fmt.Println("====Inventories====", inventories)
 
 		invMap := make(map[uuid.UUID]inventory.Inventory, len(inventories))
 
@@ -117,11 +134,11 @@ func (s *Service) CreateOrder(ctx context.Context, userID uuid.UUID, productsIDs
 			return ErrGenerateUUID
 		}
 
-		order := Order{
+		order = Order{
 			ID:              id,
 			UserID:          userID,
-			Status:          "pending",
-			Currency:        "RUB",
+			Status:          StatusPending,
+			Currency:        string(currency),
 			TotalPriceCents: totalPriceCents,
 		}
 
@@ -139,13 +156,15 @@ func (s *Service) CreateOrder(ctx context.Context, userID uuid.UUID, productsIDs
 				ProductID:           item.ProductID,
 				ProductName:         item.ProductName,
 				UnitPriceCents:      item.UnitPriceCents,
-				Currency:            "RUB",
+				Currency:            string(currency),
 				Quantity:            item.Quantity,
 				LineTotalPriceCents: item.LineTotalPriceCents,
 			}
 
 			orderItems = append(orderItems, orderItem)
 		}
+
+		fmt.Println("====Order====", order, &order)
 
 		if err := s.repo.CreateOrder(txCtx, &order); err != nil {
 			return err
@@ -155,10 +174,22 @@ func (s *Service) CreateOrder(ctx context.Context, userID uuid.UUID, productsIDs
 			return err
 		}
 
+		for _, item := range selectedItems {
+			if err := s.inventoryRepo.DecreaseQuantity(txCtx, item.ProductID, item.Quantity); err != nil {
+				return err
+			}
+		}
+
+		if err := s.cartService.DeleteSelectedItems(txCtx, userID, productsIDs); err != nil {
+			return err
+		}
+
 		return nil
 	})
 
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", op, err)
 	}
+
+	return &order, nil
 }

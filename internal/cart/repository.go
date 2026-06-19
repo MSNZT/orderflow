@@ -288,7 +288,7 @@ func (r *Repository) DeleteSelectedItems(ctx context.Context, cartID uuid.UUID, 
 
 	db := postgres.ExecutorFromContext(ctx, r.db)
 
-	resDelete, err := db.Exec(ctx, deleteQuery, cartID)
+	resDelete, err := db.Exec(ctx, deleteQuery, cartID, productIDs)
 	if err != nil {
 		return 0, fmt.Errorf("%s: %w", op, err)
 	}

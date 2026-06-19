@@ -7,6 +7,7 @@ import (
 )
 
 type Status string
+type Currency string
 
 const (
 	StatusPending   Status = "pending"

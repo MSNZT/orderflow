@@ -13,4 +13,5 @@ var (
 	ErrInventoryNotFound  = errors.New("inventory not found")
 	ErrInsufficientStock  = errors.New("insufficient stock")
 	ErrGenerateUUID       = errors.New("failed to generate uuid")
+	ErrCurrencyMismatch   = errors.New("currency mismatch")
 )
