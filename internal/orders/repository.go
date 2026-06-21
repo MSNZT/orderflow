@@ -27,11 +27,14 @@ func (r *Repository) CreateOrder(ctx context.Context, o *Order) error {
 			total_price_cents,
 			currency
 		) VALUES ($1, $2, $3, $4, $5)
+		RETURNING created_at, updated_at;
 	`
 
 	db := postgres.ExecutorFromContext(ctx, r.db)
 
-	_, err := db.Exec(ctx, query, o.ID, o.UserID, o.Status, o.TotalPriceCents, o.Currency)
+	err := db.QueryRow(ctx, query, o.ID, o.UserID, o.Status, o.TotalPriceCents, o.Currency).Scan(
+		&o.CreatedAt, &o.UpdatedAt,
+	)
 	if err != nil {
 		return fmt.Errorf("%s: %w", op, err)
 	}

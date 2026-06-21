@@ -2,6 +2,7 @@ package orders
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -18,7 +19,7 @@ type Handler struct {
 }
 
 type createOrderRequest struct {
-	ProductIDs []uuid.UUID `json:"productIDs"`
+	ProductIDs []uuid.UUID `json:"product_ids"`
 }
 
 type createOrderResponse struct {
@@ -50,8 +51,7 @@ func (h *Handler) CreateOrder(w http.ResponseWriter, r *http.Request) {
 
 	order, err := h.service.CreateOrder(r.Context(), userID, reqCreateOrder.ProductIDs)
 	if err != nil {
-		fmt.Println("Ошибка", err)
-		return
+		mapErrors(w, err, h.log, op)
 	}
 
 	fmt.Println("------===---", order)
@@ -66,6 +66,65 @@ func (h *Handler) CreateOrder(w http.ResponseWriter, r *http.Request) {
 
 	if err := httpresponse.JSON(w, http.StatusCreated, res); err != nil {
 		h.log.Error("failed to send create order response", slog.String("op", op), slog.String("err", err.Error()))
+		httpresponse.InternalError(w)
+		return
+	}
+}
+
+func mapErrors(w http.ResponseWriter, err error, log *slog.Logger, op string) {
+	switch {
+	case errors.Is(err, ErrUserIDIsNil):
+		httpresponse.Unauthorized(w)
+		return
+	case errors.Is(err, ErrProductIDsEmpty):
+		httpresponse.BadRequestMsg(w, "product_ids must not be empty")
+		return
+	case errors.Is(err, ErrProductIDIsNil):
+		httpresponse.BadRequestMsg(w, "product_ids contains an empty UUID")
+	case errors.Is(err, ErrDuplicateProductID):
+		httpresponse.BadRequestMsg(w, "product_ids contains duplicates")
+		return
+	case errors.Is(err, ErrCartChanged):
+		httpresponse.Error(
+			w,
+			http.StatusConflict,
+			"cart contents changed, refresh the cart and try again",
+		)
+		return
+	case errors.Is(err, ErrProductInactive):
+		httpresponse.Error(
+			w,
+			http.StatusConflict,
+			"one or more selected products are unavailable",
+		)
+		return
+	case errors.Is(err, ErrCurrencyMismatch):
+		httpresponse.Error(
+			w,
+			http.StatusConflict,
+			"selected products have different currencies",
+		)
+		return
+	case errors.Is(err, ErrInventoryNotFound):
+		log.Error(
+			"inventory not found while creating order",
+			slog.String("op", op),
+			slog.String("err", err.Error()),
+		)
+		httpresponse.Error(
+			w,
+			http.StatusConflict,
+			"one or more selected products are unavailable",
+		)
+	case errors.Is(err, ErrInsufficientStock):
+		httpresponse.Error(
+			w,
+			http.StatusConflict,
+			"insufficient stock for one or more selected products",
+		)
+		return
+	default:
+		log.Error("failed to create order", slog.String("op", op), slog.String("err", err.Error()))
 		httpresponse.InternalError(w)
 		return
 	}

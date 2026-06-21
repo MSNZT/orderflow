@@ -234,6 +234,7 @@ func (r *Repository) GetSelectedItemsForCheckout(ctx context.Context, cartID uui
 		FROM cart_items ci
 		JOIN products p ON p.id = ci.product_id
 		WHERE ci.cart_id = $1 AND ci.product_id = ANY($2)
+		ORDER BY ci.product_id
 		FOR UPDATE OF ci;
 	`
 

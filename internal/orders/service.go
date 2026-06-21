@@ -19,7 +19,7 @@ type CartProvider interface {
 
 type InventoryRepository interface {
 	GetByProductIDsForUpdate(ctx context.Context, productIDs []uuid.UUID) ([]inventory.Inventory, error)
-	DecreaseQuantity(ctx context.Context, productID uuid.UUID, requestedQuantity int) error
+	ReserveQuantity(ctx context.Context, productID uuid.UUID, quantity int) error
 }
 
 type Service struct {
@@ -37,24 +37,26 @@ func NewService(
 	return &Service{repo: repo, inventoryRepo: inventoryRepo, cartService: cartService, txManager: txManager}
 }
 
-func (s *Service) CreateOrder(ctx context.Context, userID uuid.UUID, productsIDs []uuid.UUID) (*Order, error) {
+func (s *Service) CreateOrder(ctx context.Context, userID uuid.UUID, productIDs []uuid.UUID) (*Order, error) {
 	const op = "orders.service.CreateOrder"
 
 	if userID == uuid.Nil {
 		return nil, fmt.Errorf("%s: %w", op, ErrUserIDIsNil)
 	}
 
-	if len(productsIDs) == 0 {
+	if len(productIDs) == 0 {
 		return nil, fmt.Errorf("%s: %w", op, ErrProductIDsEmpty)
 	}
 
-	slices.SortFunc(productsIDs, func(a, b uuid.UUID) int {
+	var sortedProductIDs = slices.Clone(productIDs)
+
+	slices.SortFunc(sortedProductIDs, func(a, b uuid.UUID) int {
 		return bytes.Compare(a[:], b[:])
 	})
 
-	var uniqueIDs = make(map[uuid.UUID]struct{}, len(productsIDs))
+	var uniqueIDs = make(map[uuid.UUID]struct{}, len(sortedProductIDs))
 
-	for _, id := range productsIDs {
+	for _, id := range sortedProductIDs {
 		if id == uuid.Nil {
 			return nil, fmt.Errorf("%s: %w", op, ErrProductIDIsNil)
 		}
@@ -69,9 +71,9 @@ func (s *Service) CreateOrder(ctx context.Context, userID uuid.UUID, productsIDs
 	var order Order
 
 	err := s.txManager.WithinTx(ctx, func(txCtx context.Context) error {
-		lenProductsIDs := len(productsIDs)
+		lenProductsIDs := len(sortedProductIDs)
 
-		selectedItems, err := s.cartService.GetSelectedItemsForCheckout(txCtx, userID, productsIDs)
+		selectedItems, err := s.cartService.GetSelectedItemsForCheckout(txCtx, userID, sortedProductIDs)
 		if err != nil {
 			return err
 		}
@@ -99,7 +101,7 @@ func (s *Service) CreateOrder(ctx context.Context, userID uuid.UUID, productsIDs
 			totalPriceCents += int64(selectedItem.LineTotalPriceCents)
 		}
 
-		inventories, err := s.inventoryRepo.GetByProductIDsForUpdate(txCtx, productsIDs)
+		inventories, err := s.inventoryRepo.GetByProductIDsForUpdate(txCtx, sortedProductIDs)
 		if err != nil {
 			return err
 		}
@@ -107,8 +109,6 @@ func (s *Service) CreateOrder(ctx context.Context, userID uuid.UUID, productsIDs
 		if len(inventories) < lenProductsIDs {
 			return ErrInventoryNotFound
 		}
-
-		fmt.Println("====Inventories====", inventories)
 
 		invMap := make(map[uuid.UUID]inventory.Inventory, len(inventories))
 
@@ -164,8 +164,6 @@ func (s *Service) CreateOrder(ctx context.Context, userID uuid.UUID, productsIDs
 			orderItems = append(orderItems, orderItem)
 		}
 
-		fmt.Println("====Order====", order, &order)
-
 		if err := s.repo.CreateOrder(txCtx, &order); err != nil {
 			return err
 		}
@@ -175,12 +173,12 @@ func (s *Service) CreateOrder(ctx context.Context, userID uuid.UUID, productsIDs
 		}
 
 		for _, item := range selectedItems {
-			if err := s.inventoryRepo.DecreaseQuantity(txCtx, item.ProductID, item.Quantity); err != nil {
+			if err := s.inventoryRepo.ReserveQuantity(txCtx, item.ProductID, item.Quantity); err != nil {
 				return err
 			}
 		}
 
-		if err := s.cartService.DeleteSelectedItems(txCtx, userID, productsIDs); err != nil {
+		if err := s.cartService.DeleteSelectedItems(txCtx, userID, sortedProductIDs); err != nil {
 			return err
 		}
 
