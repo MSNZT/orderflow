@@ -3,7 +3,6 @@ package orders
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"log/slog"
 	"net/http"
 	"time"
@@ -51,10 +50,9 @@ func (h *Handler) CreateOrder(w http.ResponseWriter, r *http.Request) {
 
 	order, err := h.service.CreateOrder(r.Context(), userID, reqCreateOrder.ProductIDs)
 	if err != nil {
-		mapErrors(w, err, h.log, op)
+		writeCreateOrderError(w, err, h.log, op)
+		return
 	}
-
-	fmt.Println("------===---", order)
 
 	res := createOrderResponse{
 		ID:              order.ID,
@@ -71,7 +69,7 @@ func (h *Handler) CreateOrder(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func mapErrors(w http.ResponseWriter, err error, log *slog.Logger, op string) {
+func writeCreateOrderError(w http.ResponseWriter, err error, log *slog.Logger, op string) {
 	switch {
 	case errors.Is(err, ErrUserIDIsNil):
 		httpresponse.Unauthorized(w)
@@ -81,6 +79,7 @@ func mapErrors(w http.ResponseWriter, err error, log *slog.Logger, op string) {
 		return
 	case errors.Is(err, ErrProductIDIsNil):
 		httpresponse.BadRequestMsg(w, "product_ids contains an empty UUID")
+		return
 	case errors.Is(err, ErrDuplicateProductID):
 		httpresponse.BadRequestMsg(w, "product_ids contains duplicates")
 		return
@@ -105,23 +104,20 @@ func mapErrors(w http.ResponseWriter, err error, log *slog.Logger, op string) {
 			"selected products have different currencies",
 		)
 		return
-	case errors.Is(err, ErrInventoryNotFound):
-		log.Error(
-			"inventory not found while creating order",
-			slog.String("op", op),
-			slog.String("err", err.Error()),
-		)
-		httpresponse.Error(
-			w,
-			http.StatusConflict,
-			"one or more selected products are unavailable",
-		)
 	case errors.Is(err, ErrInsufficientStock):
 		httpresponse.Error(
 			w,
 			http.StatusConflict,
 			"insufficient stock for one or more selected products",
 		)
+		return
+	case errors.Is(err, ErrInventoryNotFound):
+		log.Error(
+			"inventory not found while creating order",
+			slog.String("op", op),
+			slog.String("err", err.Error()),
+		)
+		httpresponse.InternalError(w)
 		return
 	default:
 		log.Error("failed to create order", slog.String("op", op), slog.String("err", err.Error()))

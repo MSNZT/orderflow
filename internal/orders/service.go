@@ -3,6 +3,7 @@ package orders
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 
@@ -75,6 +76,9 @@ func (s *Service) CreateOrder(ctx context.Context, userID uuid.UUID, productIDs 
 
 		selectedItems, err := s.cartService.GetSelectedItemsForCheckout(txCtx, userID, sortedProductIDs)
 		if err != nil {
+			if errors.Is(err, cart.ErrCartNotFound) {
+				return ErrCartChanged
+			}
 			return err
 		}
 
@@ -174,11 +178,17 @@ func (s *Service) CreateOrder(ctx context.Context, userID uuid.UUID, productIDs 
 
 		for _, item := range selectedItems {
 			if err := s.inventoryRepo.ReserveQuantity(txCtx, item.ProductID, item.Quantity); err != nil {
+				if errors.Is(err, inventory.ErrInsufficientStock) {
+					return ErrInsufficientStock
+				}
 				return err
 			}
 		}
 
 		if err := s.cartService.DeleteSelectedItems(txCtx, userID, sortedProductIDs); err != nil {
+			if errors.Is(err, cart.ErrCartItemNotFound) || errors.Is(err, cart.ErrCartNotFound) {
+				return ErrCartChanged
+			}
 			return err
 		}
 
