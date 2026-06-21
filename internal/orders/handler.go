@@ -5,6 +5,8 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"net/url"
+	"strconv"
 	"time"
 
 	"github.com/MSNZT/orderflow/internal/authcontext"
@@ -28,6 +30,27 @@ type createOrderResponse struct {
 	Currency        string    `json:"currency"`
 	CreatedAt       time.Time `json:"created_at"`
 }
+
+type orderListItemResponse struct {
+	ID              uuid.UUID `json:"id"`
+	Status          Status    `json:"status"`
+	TotalPriceCents int64     `json:"total_price_cents"`
+	Currency        string    `json:"currency"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
+}
+
+type getOrdersResponse struct {
+	Orders []orderListItemResponse `json:"orders"`
+	Page   int                     `json:"page"`
+	Limit  int                     `json:"limit"`
+}
+
+const (
+	defaultOrdersLimit = 20
+	maxOrdersLimit     = 100
+	defaultOrdersPage  = 1
+)
 
 func NewHandler(log *slog.Logger, service *Service) *Handler {
 	return &Handler{service: service, log: log}
@@ -67,6 +90,62 @@ func (h *Handler) CreateOrder(w http.ResponseWriter, r *http.Request) {
 		httpresponse.InternalError(w)
 		return
 	}
+}
+
+func (h *Handler) ListByUserID(w http.ResponseWriter, r *http.Request) {
+	const op = "orders.handler.ListByUserID"
+
+	userID, ok := authcontext.UserID(r.Context())
+	if !ok {
+		httpresponse.Unauthorized(w)
+		return
+	}
+
+	queryParams := r.URL.Query()
+	page, ok := parsePagination(queryParams, "page")
+	if !ok {
+		httpresponse.BadRequestMsg(w, "invalid query params")
+		return
+	}
+
+	if page < defaultOrdersPage {
+		page = defaultOrdersPage
+	}
+
+	limit, ok := parsePagination(queryParams, "limit")
+	if !ok {
+		httpresponse.BadRequestMsg(w, "invalid query params")
+		return
+	}
+
+	if limit <= 0 {
+		limit = defaultOrdersLimit
+	}
+
+	if limit > maxOrdersLimit {
+		limit = maxOrdersLimit
+	}
+
+	orders, err := h.service.ListByUserID(r.Context(), userID, page, limit)
+	if err != nil {
+		if errors.Is(err, ErrUserIDIsNil) {
+			httpresponse.Unauthorized(w)
+			return
+		}
+
+		h.log.Error("failed to get orders", slog.String("op", op), slog.String("err", err.Error()))
+		httpresponse.InternalError(w)
+		return
+	}
+
+	res := toOrdersResponse(orders, page, limit)
+
+	if err := httpresponse.JSON(w, http.StatusOK, res); err != nil {
+		h.log.Error("failed to send response orders", slog.String("op", op), slog.String("err", err.Error()))
+		httpresponse.InternalError(w)
+		return
+	}
+
 }
 
 func writeCreateOrderError(w http.ResponseWriter, err error, log *slog.Logger, op string) {
@@ -123,5 +202,43 @@ func writeCreateOrderError(w http.ResponseWriter, err error, log *slog.Logger, o
 		log.Error("failed to create order", slog.String("op", op), slog.String("err", err.Error()))
 		httpresponse.InternalError(w)
 		return
+	}
+}
+
+func parsePagination(urlValues url.Values, key string) (int, bool) {
+	str := urlValues.Get(key)
+	if str == "" {
+		return 0, true
+	}
+
+	v, err := strconv.ParseInt(str, 10, 32)
+	if err != nil {
+		return 0, false
+	}
+
+	if v < 0 {
+		return 0, true
+	}
+
+	return int(v), true
+}
+
+func toOrdersResponse(orders []Order, page, limit int) *getOrdersResponse {
+	resOrders := make([]orderListItemResponse, 0, len(orders))
+	for _, o := range orders {
+		resOrders = append(resOrders, orderListItemResponse{
+			ID:              o.ID,
+			Status:          o.Status,
+			TotalPriceCents: o.TotalPriceCents,
+			Currency:        o.Currency,
+			CreatedAt:       o.CreatedAt,
+			UpdatedAt:       o.UpdatedAt,
+		})
+	}
+
+	return &getOrdersResponse{
+		Orders: resOrders,
+		Page:   page,
+		Limit:  limit,
 	}
 }

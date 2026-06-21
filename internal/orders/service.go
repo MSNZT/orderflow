@@ -38,6 +38,23 @@ func NewService(
 	return &Service{repo: repo, inventoryRepo: inventoryRepo, cartService: cartService, txManager: txManager}
 }
 
+func (s *Service) ListByUserID(ctx context.Context, userID uuid.UUID, page int, limit int) ([]Order, error) {
+	const op = "orders.service.ListByUserID"
+
+	if userID == uuid.Nil {
+		return nil, fmt.Errorf("%s: %w", op, ErrUserIDIsNil)
+	}
+
+	offset := (page - 1) * limit
+
+	orders, err := s.repo.ListByUserID(ctx, userID, offset, limit)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", op, err)
+	}
+
+	return orders, nil
+}
+
 func (s *Service) CreateOrder(ctx context.Context, userID uuid.UUID, productIDs []uuid.UUID) (*Order, error) {
 	const op = "orders.service.CreateOrder"
 

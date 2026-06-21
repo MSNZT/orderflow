@@ -73,6 +73,7 @@ func NewRouter(log *slog.Logger, tokenParser httpmiddleware.TokenParser, deps Ro
 		r.Route("/orders", func(r chi.Router) {
 			r.Group(func(r chi.Router) {
 				r.Use(httpmiddleware.Auth(tokenParser))
+				r.Get("/", deps.OrderHandler.ListByUserID)
 				r.Post("/", deps.OrderHandler.CreateOrder)
 			})
 		})

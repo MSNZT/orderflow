@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/MSNZT/orderflow/internal/platform/postgres"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -14,6 +15,54 @@ type Repository struct {
 
 func NewRepository(db postgres.DBTX) *Repository {
 	return &Repository{db: db}
+}
+
+func (r *Repository) ListByUserID(ctx context.Context, userID uuid.UUID, offset int, limit int) ([]Order, error) {
+	const op = "orders.repository.ListByUserID"
+
+	query := `
+		SELECT 
+			id,
+			user_id,
+			status,
+			total_price_cents,
+			currency,
+			created_at,
+			updated_at
+		FROM orders
+		WHERE user_id = $1
+		ORDER BY created_at DESC, id DESC
+		LIMIT $2
+		OFFSET $3;
+	`
+
+	orders := make([]Order, 0)
+
+	db := postgres.ExecutorFromContext(ctx, r.db)
+
+	rows, err := db.Query(ctx, query, userID, limit, offset)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", op, err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var o Order
+		if err := rows.Scan(
+			&o.ID, &o.UserID, &o.Status, &o.TotalPriceCents, &o.Currency,
+			&o.CreatedAt, &o.UpdatedAt); err != nil {
+			return nil, fmt.Errorf("%s: %w", op, err)
+		}
+
+		orders = append(orders, o)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("%s: %w", op, err)
+	}
+
+	return orders, nil
+
 }
 
 func (r *Repository) CreateOrder(ctx context.Context, o *Order) error {
