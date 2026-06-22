@@ -11,6 +11,7 @@ import (
 
 	"github.com/MSNZT/orderflow/internal/authcontext"
 	"github.com/MSNZT/orderflow/internal/httpresponse"
+	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 )
 
@@ -23,15 +24,7 @@ type createOrderRequest struct {
 	ProductIDs []uuid.UUID `json:"product_ids"`
 }
 
-type createOrderResponse struct {
-	ID              uuid.UUID `json:"id"`
-	Status          Status    `json:"status"`
-	TotalPriceCents int64     `json:"total_price_cents"`
-	Currency        string    `json:"currency"`
-	CreatedAt       time.Time `json:"created_at"`
-}
-
-type orderListItemResponse struct {
+type orderBaseInfo struct {
 	ID              uuid.UUID `json:"id"`
 	Status          Status    `json:"status"`
 	TotalPriceCents int64     `json:"total_price_cents"`
@@ -40,10 +33,34 @@ type orderListItemResponse struct {
 	UpdatedAt       time.Time `json:"updated_at"`
 }
 
+type createOrderResponse struct {
+	ID              uuid.UUID `json:"id"`
+	Status          Status    `json:"status"`
+	TotalPriceCents int64     `json:"total_price_cents"`
+	Currency        string    `json:"currency"`
+	CreatedAt       time.Time `json:"created_at"`
+}
+
 type getOrdersResponse struct {
-	Orders []orderListItemResponse `json:"orders"`
-	Page   int                     `json:"page"`
-	Limit  int                     `json:"limit"`
+	Orders []orderBaseInfo `json:"orders"`
+	Page   int             `json:"page"`
+	Limit  int             `json:"limit"`
+}
+
+type orderItemResponse struct {
+	ID                  uuid.UUID `json:"id"`
+	ProductID           uuid.UUID `json:"product_id"`
+	ProductName         string    `json:"product_name"`
+	UnitPriceCents      int64     `json:"unit_price_cents"`
+	Currency            string    `json:"currency"`
+	Quantity            int       `json:"quantity"`
+	LineTotalPriceCents int64     `json:"line_total_price_cents"`
+	CreatedAt           time.Time `json:"created_at"`
+}
+
+type orderResponse struct {
+	orderBaseInfo
+	Items []orderItemResponse `json:"items"`
 }
 
 const (
@@ -148,6 +165,51 @@ func (h *Handler) ListByUserID(w http.ResponseWriter, r *http.Request) {
 
 }
 
+func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
+	const op = "orders.handler.GetByID"
+
+	userID, ok := authcontext.UserID(r.Context())
+	if !ok {
+		httpresponse.Unauthorized(w)
+		return
+	}
+
+	urlOrderID := chi.URLParam(r, "orderID")
+	orderID, err := uuid.Parse(urlOrderID)
+	if err != nil {
+		httpresponse.BadRequestMsg(w, "invalid order id")
+		return
+	}
+
+	orderDetails, err := h.service.GetByID(r.Context(), userID, orderID)
+	if err != nil {
+		switch {
+		case errors.Is(err, ErrUserIDIsNil):
+			httpresponse.Unauthorized(w)
+			return
+		case errors.Is(err, ErrOrderIDIsNil):
+			httpresponse.BadRequestMsg(w, "invalid order id")
+			return
+		case errors.Is(err, ErrOrderNotFound):
+			httpresponse.Error(w, http.StatusNotFound, "order not found")
+			return
+		default:
+			h.log.Error("failed to get order by id", slog.String("op", op), slog.String("err", err.Error()))
+			httpresponse.InternalError(w)
+			return
+		}
+	}
+
+	res := toOrderResponse(orderDetails)
+
+	if err := httpresponse.JSON(w, http.StatusOK, res); err != nil {
+		h.log.Error("failed to send order response", slog.String("op", op), slog.String("err", err.Error()))
+		httpresponse.InternalError(w)
+		return
+	}
+
+}
+
 func writeCreateOrderError(w http.ResponseWriter, err error, log *slog.Logger, op string) {
 	switch {
 	case errors.Is(err, ErrUserIDIsNil):
@@ -224,9 +286,9 @@ func parsePagination(urlValues url.Values, key string) (int, bool) {
 }
 
 func toOrdersResponse(orders []Order, page, limit int) *getOrdersResponse {
-	resOrders := make([]orderListItemResponse, 0, len(orders))
+	resOrders := make([]orderBaseInfo, 0, len(orders))
 	for _, o := range orders {
-		resOrders = append(resOrders, orderListItemResponse{
+		resOrders = append(resOrders, orderBaseInfo{
 			ID:              o.ID,
 			Status:          o.Status,
 			TotalPriceCents: o.TotalPriceCents,
@@ -240,5 +302,33 @@ func toOrdersResponse(orders []Order, page, limit int) *getOrdersResponse {
 		Orders: resOrders,
 		Page:   page,
 		Limit:  limit,
+	}
+}
+
+func toOrderResponse(orderDetails *OrderDetails) *orderResponse {
+	orderItems := make([]orderItemResponse, 0, len(orderDetails.Items))
+	for _, item := range orderDetails.Items {
+		orderItems = append(orderItems, orderItemResponse{
+			ID:                  item.ID,
+			ProductID:           item.ProductID,
+			ProductName:         item.ProductName,
+			UnitPriceCents:      item.UnitPriceCents,
+			Currency:            item.Currency,
+			Quantity:            item.Quantity,
+			LineTotalPriceCents: item.LineTotalPriceCents,
+			CreatedAt:           item.CreatedAt,
+		})
+	}
+
+	return &orderResponse{
+		orderBaseInfo: orderBaseInfo{
+			ID:              orderDetails.ID,
+			Status:          orderDetails.Status,
+			TotalPriceCents: orderDetails.TotalPriceCents,
+			Currency:        orderDetails.Currency,
+			CreatedAt:       orderDetails.CreatedAt,
+			UpdatedAt:       orderDetails.UpdatedAt,
+		},
+		Items: orderItems,
 	}
 }

@@ -36,3 +36,8 @@ type OrderItem struct {
 	LineTotalPriceCents int64
 	CreatedAt           time.Time
 }
+
+type OrderDetails struct {
+	Order
+	Items []OrderItem
+}

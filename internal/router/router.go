@@ -74,6 +74,7 @@ func NewRouter(log *slog.Logger, tokenParser httpmiddleware.TokenParser, deps Ro
 			r.Group(func(r chi.Router) {
 				r.Use(httpmiddleware.Auth(tokenParser))
 				r.Get("/", deps.OrderHandler.ListByUserID)
+				r.Get("/{orderID}", deps.OrderHandler.GetByID)
 				r.Post("/", deps.OrderHandler.CreateOrder)
 			})
 		})

@@ -55,6 +55,25 @@ func (s *Service) ListByUserID(ctx context.Context, userID uuid.UUID, page int, 
 	return orders, nil
 }
 
+func (s *Service) GetByID(ctx context.Context, userID uuid.UUID, orderID uuid.UUID) (*OrderDetails, error) {
+	const op = "orders.service.GetByID"
+
+	if userID == uuid.Nil {
+		return nil, fmt.Errorf("%s: %w", op, ErrUserIDIsNil)
+	}
+
+	if orderID == uuid.Nil {
+		return nil, fmt.Errorf("%s: %w", op, ErrOrderIDIsNil)
+	}
+
+	orderDetails, err := s.repo.GetDetailsByIDAndUserID(ctx, userID, orderID)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", op, err)
+	}
+
+	return orderDetails, nil
+}
+
 func (s *Service) CreateOrder(ctx context.Context, userID uuid.UUID, productIDs []uuid.UUID) (*Order, error) {
 	const op = "orders.service.CreateOrder"
 

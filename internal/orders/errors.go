@@ -5,6 +5,7 @@ import "errors"
 var (
 	ErrOrderNotFound      = errors.New("order not found")
 	ErrUserIDIsNil        = errors.New("user id is nil")
+	ErrOrderIDIsNil       = errors.New("order id is nil")
 	ErrProductIDIsNil     = errors.New("product id is nil")
 	ErrProductIDsEmpty    = errors.New("product ids empty")
 	ErrDuplicateProductID = errors.New("duplicate product id")
