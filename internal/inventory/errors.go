@@ -3,6 +3,8 @@ package inventory
 import "errors"
 
 var (
-	ErrInventoryNotFound      = errors.New("inventory not found")
-	ErrInventoryAlreadyExists = errors.New("inventory already exists")
+	ErrInventoryNotFound        = errors.New("inventory not found")
+	ErrInventoryAlreadyExists   = errors.New("inventory already exists")
+	ErrInsufficientStock        = errors.New("insufficient stock")
+	ErrInventoryQuantityInvalid = errors.New("inventory quantity invalid")
 )

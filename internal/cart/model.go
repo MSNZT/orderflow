@@ -20,3 +20,13 @@ type CartItem struct {
 	CreatedAt           time.Time
 	UpdatedAt           time.Time
 }
+
+type CheckoutItem struct {
+	ProductID           uuid.UUID
+	ProductName         string
+	UnitPriceCents      int64
+	Currency            string
+	Quantity            int
+	LineTotalPriceCents int64
+	IsProductActive     bool
+}

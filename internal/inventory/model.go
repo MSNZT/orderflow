@@ -13,3 +13,8 @@ type Inventory struct {
 	CreatedAt        time.Time
 	UpdatedAt        time.Time
 }
+
+type StockDecrease struct {
+	ProductID uuid.UUID
+	Quantity  int32
+}

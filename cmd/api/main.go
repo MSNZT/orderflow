@@ -14,6 +14,7 @@ import (
 	"github.com/MSNZT/orderflow/internal/httpserver"
 	"github.com/MSNZT/orderflow/internal/inventory"
 	"github.com/MSNZT/orderflow/internal/logger"
+	"github.com/MSNZT/orderflow/internal/orders"
 	"github.com/MSNZT/orderflow/internal/platform/postgres"
 	"github.com/MSNZT/orderflow/internal/products"
 	"github.com/MSNZT/orderflow/internal/router"
@@ -63,11 +64,16 @@ func main() {
 	cartService := cart.NewService(cartRepository, txManager, productsService)
 	cartHandler := cart.NewHandler(log, cartService)
 
+	orderRepository := orders.NewRepository(dbPool)
+	orderService := orders.NewService(orderRepository, inventoryRepository, cartService, txManager)
+	orderHandler := orders.NewHandler(log, orderService)
+
 	router := router.NewRouter(log, tokenManager, router.RouterDependencies{
 		AuthHandler:     authHandler,
 		ProductsHandler: productsHandler,
 		CartHandler:     cartHandler,
 		HealthHandler:   healthHandler,
+		OrderHandler:    orderHandler,
 	})
 
 	server := httpserver.New(cfg, log, router)

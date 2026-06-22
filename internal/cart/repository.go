@@ -222,3 +222,86 @@ func (r *Repository) ClearItems(ctx context.Context, cartID uuid.UUID) error {
 
 	return nil
 }
+
+func (r *Repository) GetSelectedItemsForCheckout(ctx context.Context, cartID uuid.UUID, productIDs []uuid.UUID) ([]CheckoutItem, error) {
+	const op = "cart.repository.GetSelectedItemsForCheckout"
+
+	query := `
+		SELECT 
+			ci.product_id, p.name, p.price_cents, p.currency, ci.quantity,
+			p.price_cents * ci.quantity AS line_total_price_cents,
+			p.is_active
+		FROM cart_items ci
+		JOIN products p ON p.id = ci.product_id
+		WHERE ci.cart_id = $1 AND ci.product_id = ANY($2)
+		ORDER BY ci.product_id
+		FOR UPDATE OF ci;
+	`
+
+	db := postgres.ExecutorFromContext(ctx, r.db)
+
+	rows, err := db.Query(ctx, query, cartID, productIDs)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", op, err)
+	}
+
+	defer rows.Close()
+
+	var checkoutItems = make([]CheckoutItem, 0, len(productIDs))
+
+	for rows.Next() {
+		var item CheckoutItem
+
+		if err := rows.Scan(
+			&item.ProductID, &item.ProductName, &item.UnitPriceCents, &item.Currency, &item.Quantity,
+			&item.LineTotalPriceCents, &item.IsProductActive,
+		); err != nil {
+			return nil, fmt.Errorf("%s: %w", op, err)
+		}
+
+		checkoutItems = append(checkoutItems, item)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("%s: %w", op, err)
+	}
+
+	return checkoutItems, nil
+}
+
+func (r *Repository) DeleteSelectedItems(ctx context.Context, cartID uuid.UUID, productIDs []uuid.UUID) (int64, error) {
+	const op = "cart.repository.DeleteSelectedItems"
+
+	if len(productIDs) == 0 {
+		return 0, nil
+	}
+
+	deleteQuery := `
+		DELETE FROM cart_items
+		WHERE cart_id = $1 AND product_id = ANY($2)
+	`
+
+	updateQuery := `
+		UPDATE carts
+		SET updated_at = now()
+		WHERE id = $1
+	`
+
+	db := postgres.ExecutorFromContext(ctx, r.db)
+
+	resDelete, err := db.Exec(ctx, deleteQuery, cartID, productIDs)
+	if err != nil {
+		return 0, fmt.Errorf("%s: %w", op, err)
+	}
+
+	res, err := db.Exec(ctx, updateQuery, cartID)
+	if err != nil {
+		return 0, fmt.Errorf("%s: %w", op, err)
+	}
+
+	if res.RowsAffected() == 0 {
+		return 0, fmt.Errorf("%s: %w", op, ErrCartNotFound)
+	}
+
+	return resDelete.RowsAffected(), nil
+}

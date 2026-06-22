@@ -8,6 +8,7 @@ import (
 	"github.com/MSNZT/orderflow/internal/cart"
 	"github.com/MSNZT/orderflow/internal/health"
 	"github.com/MSNZT/orderflow/internal/httpmiddleware"
+	"github.com/MSNZT/orderflow/internal/orders"
 	"github.com/MSNZT/orderflow/internal/products"
 	"github.com/MSNZT/orderflow/internal/users"
 	"github.com/go-chi/chi/v5"
@@ -19,6 +20,7 @@ type RouterDependencies struct {
 	ProductsHandler *products.Handler
 	CartHandler     *cart.Handler
 	HealthHandler   *health.Handler
+	OrderHandler    *orders.Handler
 }
 
 func NewRouter(log *slog.Logger, tokenParser httpmiddleware.TokenParser, deps RouterDependencies) http.Handler {
@@ -65,6 +67,15 @@ func NewRouter(log *slog.Logger, tokenParser httpmiddleware.TokenParser, deps Ro
 				r.Patch("/items/{productID}", deps.CartHandler.UpdateItemQuantity)
 				r.Delete("/items/{productID}", deps.CartHandler.DeleteItem)
 				r.Delete("/items", deps.CartHandler.ClearItems)
+			})
+		})
+
+		r.Route("/orders", func(r chi.Router) {
+			r.Group(func(r chi.Router) {
+				r.Use(httpmiddleware.Auth(tokenParser))
+				r.Get("/", deps.OrderHandler.ListByUserID)
+				r.Get("/{orderID}", deps.OrderHandler.GetByID)
+				r.Post("/", deps.OrderHandler.CreateOrder)
 			})
 		})
 	})
