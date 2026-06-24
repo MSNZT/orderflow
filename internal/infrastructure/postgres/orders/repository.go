@@ -31,6 +31,7 @@ func (r *Repository) ListByUserID(ctx context.Context, userID uuid.UUID, offset 
 			status,
 			total_price_cents,
 			currency,
+			expires_at,
 			created_at,
 			updated_at
 		FROM orders
@@ -53,7 +54,7 @@ func (r *Repository) ListByUserID(ctx context.Context, userID uuid.UUID, offset 
 	for rows.Next() {
 		var o ordersapp.Order
 		if err := rows.Scan(
-			&o.ID, &o.UserID, &o.Status, &o.TotalPriceCents, &o.Currency,
+			&o.ID, &o.UserID, &o.Status, &o.TotalPriceCents, &o.Currency, &o.ExpiresAt,
 			&o.CreatedAt, &o.UpdatedAt); err != nil {
 			return nil, fmt.Errorf("%s: %w", op, err)
 		}
@@ -81,6 +82,7 @@ func (r *Repository) GetDetailsByIDAndUserID(ctx context.Context, userID uuid.UU
 			status,
 			total_price_cents,
 			currency,
+			expires_at,
 			created_at,
 			updated_at
 		FROM orders
@@ -116,7 +118,7 @@ func (r *Repository) GetDetailsByIDAndUserID(ctx context.Context, userID uuid.UU
 
 	var order ordersapp.Order
 	err = br.QueryRow().Scan(&order.ID, &order.UserID, &order.Status, &order.TotalPriceCents, &order.Currency,
-		&order.CreatedAt, &order.UpdatedAt,
+		&order.ExpiresAt, &order.CreatedAt, &order.UpdatedAt,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -166,14 +168,15 @@ func (r *Repository) CreateOrder(ctx context.Context, o *ordersapp.Order) error 
 			user_id,
 			status,
 			total_price_cents,
-			currency
-		) VALUES ($1, $2, $3, $4, $5)
+			currency,
+			expires_at
+		) VALUES ($1, $2, $3, $4, $5, $6)
 		RETURNING created_at, updated_at;
 	`
 
 	db := postgres.ExecutorFromContext(ctx, r.db)
 
-	err := db.QueryRow(ctx, query, o.ID, o.UserID, o.Status, o.TotalPriceCents, o.Currency).Scan(
+	err := db.QueryRow(ctx, query, o.ID, o.UserID, o.Status, o.TotalPriceCents, o.Currency, o.ExpiresAt).Scan(
 		&o.CreatedAt, &o.UpdatedAt,
 	)
 	if err != nil {

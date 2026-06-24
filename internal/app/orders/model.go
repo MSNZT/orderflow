@@ -10,9 +10,10 @@ type Status string
 type Currency string
 
 const (
-	StatusPending   Status = "pending"
-	StatusPaid      Status = "paid"
-	StatusCancelled Status = "cancelled"
+	StatusPending  Status = "pending"
+	StatusPaid     Status = "paid"
+	StatusCanceled Status = "canceled"
+	StatusExpired  Status = "expired"
 )
 
 type Order struct {
@@ -21,6 +22,7 @@ type Order struct {
 	Status          Status
 	TotalPriceCents int64
 	Currency        string
+	ExpiresAt       time.Time
 	UpdatedAt       time.Time
 	CreatedAt       time.Time
 }

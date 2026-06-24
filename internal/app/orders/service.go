@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"time"
 
 	"github.com/MSNZT/orderflow/internal/app/cart"
 	"github.com/MSNZT/orderflow/internal/app/inventory"
@@ -18,18 +19,21 @@ type Service struct {
 	inventoryRepo InventoryRepository
 	cartService   CartProvider
 	txManager     transaction.Manager
+	paymentTTL    time.Duration
 }
 
 func NewService(
 	repo Repository,
 	inventoryRepo InventoryRepository,
 	cartService CartProvider,
-	txManager transaction.Manager) *Service {
+	txManager transaction.Manager,
+	paymentTTL time.Duration) *Service {
 	return &Service{
 		repo:          repo,
 		inventoryRepo: inventoryRepo,
 		cartService:   cartService,
 		txManager:     txManager,
+		paymentTTL:    paymentTTL,
 	}
 }
 
@@ -169,12 +173,15 @@ func (s *Service) CreateOrder(ctx context.Context, userID uuid.UUID, productIDs 
 			return ErrGenerateUUID
 		}
 
+		expiresAt := time.Now().Add(s.paymentTTL).UTC().Truncate(time.Microsecond)
+
 		order = Order{
 			ID:              id,
 			UserID:          userID,
 			Status:          StatusPending,
 			Currency:        string(currency),
 			TotalPriceCents: totalPriceCents,
+			ExpiresAt:       expiresAt,
 		}
 
 		var orderItems = make([]OrderItem, 0, len(selectedItems))

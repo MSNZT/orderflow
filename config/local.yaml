@@ -16,3 +16,6 @@ jwt:
   secret: "secret-jwt-change-me"
   access_ttl: 15m
   refresh_ttl: 168h
+
+orders:
+  payment_ttl: 5m

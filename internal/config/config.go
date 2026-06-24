@@ -12,6 +12,7 @@ type Config struct {
 	HTTP     HTTPConfig     `yaml:"http"`
 	Postgres PostgresConfig `yaml:"postgres"`
 	JWT      JWTConfig      `yaml:"jwt"`
+	Orders   OrdersConfig   `yaml:"orders"`
 }
 
 type HTTPConfig struct {
@@ -34,6 +35,10 @@ type JWTConfig struct {
 	Secret     string        `yaml:"secret" env:"JWT_SECRET"`
 	AccessTTL  time.Duration `yaml:"access_ttl" env:"JWT_ACCESS_TTL"`
 	RefreshTTL time.Duration `yaml:"refresh_ttl" env:"JWT_REFRESH_TTL"`
+}
+
+type OrdersConfig struct {
+	PaymentTTL time.Duration `yaml:"payment_ttl" env:"PAYMENT_TTL"`
 }
 
 func Load() (*Config, error) {
@@ -114,6 +119,10 @@ func (c *Config) validate() error {
 
 	if c.JWT.RefreshTTL <= 0 {
 		return fmt.Errorf("jwt refresh ttl must be greater than 0")
+	}
+
+	if c.Orders.PaymentTTL <= 0 {
+		return fmt.Errorf("orders payment ttl must be greater than 0")
 	}
 
 	return nil

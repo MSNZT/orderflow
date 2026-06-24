@@ -73,9 +73,15 @@ func main() {
 	cartService := cartapp.NewService(cartRepository, txManager, productsService)
 	cartHandler := carthttp.NewHandler(log, cartService)
 
+<<<<<<< HEAD
 	orderRepository := ordersrepo.NewRepository(dbPool)
 	orderService := ordersapp.NewService(orderRepository, inventoryRepository, cartService, txManager)
 	orderHandler := ordershttp.NewHandler(log, orderService)
+=======
+	orderRepository := orders.NewRepository(dbPool)
+	orderService := orders.NewService(orderRepository, inventoryRepository, cartService, txManager, cfg.Orders.PaymentTTL)
+	orderHandler := orders.NewHandler(log, orderService)
+>>>>>>> 2e409d5 (feat: add payment repository foundation)
 
 	router := router.NewRouter(log, tokenManager, router.RouterDependencies{
 		AuthHandler:     authHandler,
