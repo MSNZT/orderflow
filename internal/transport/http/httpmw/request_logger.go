@@ -1,4 +1,4 @@
-package httpmiddleware
+package middleware
 
 import (
 	"log/slog"

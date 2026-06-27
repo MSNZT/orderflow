@@ -7,9 +7,9 @@ import (
 	"github.com/MSNZT/orderflow/internal/auth"
 	"github.com/MSNZT/orderflow/internal/cart"
 	"github.com/MSNZT/orderflow/internal/health"
-	"github.com/MSNZT/orderflow/internal/httpmiddleware"
 	"github.com/MSNZT/orderflow/internal/orders"
 	"github.com/MSNZT/orderflow/internal/products"
+	"github.com/MSNZT/orderflow/internal/transport/http/httpmw"
 	"github.com/MSNZT/orderflow/internal/users"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -23,11 +23,11 @@ type RouterDependencies struct {
 	OrderHandler    *orders.Handler
 }
 
-func NewRouter(log *slog.Logger, tokenParser httpmiddleware.TokenParser, deps RouterDependencies) http.Handler {
+func NewRouter(log *slog.Logger, tokenParser httpmw.TokenParser, deps RouterDependencies) http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
-	r.Use(httpmiddleware.RequestLogger(log))
+	r.Use(httpmw.RequestLogger(log))
 	r.Use(middleware.Recoverer)
 
 	r.Get("/health/live", deps.HealthHandler.Live)
@@ -40,7 +40,7 @@ func NewRouter(log *slog.Logger, tokenParser httpmiddleware.TokenParser, deps Ro
 		r.Post("/auth/refresh", deps.AuthHandler.Refresh)
 
 		r.Group(func(r chi.Router) {
-			r.Use(httpmiddleware.Auth(tokenParser))
+			r.Use(httpmw.Auth(tokenParser))
 			r.Get("/me", deps.AuthHandler.Me)
 		})
 
@@ -51,8 +51,8 @@ func NewRouter(log *slog.Logger, tokenParser httpmiddleware.TokenParser, deps Ro
 
 		r.Route("/management/products", func(r chi.Router) {
 			r.Group(func(r chi.Router) {
-				r.Use(httpmiddleware.Auth(tokenParser))
-				r.Use(httpmiddleware.RequireRole(users.RoleManager, users.RoleAdmin))
+				r.Use(httpmw.Auth(tokenParser))
+				r.Use(httpmw.RequireRole(users.RoleManager, users.RoleAdmin))
 
 				r.Post("/", deps.ProductsHandler.Create)
 			})
@@ -60,7 +60,7 @@ func NewRouter(log *slog.Logger, tokenParser httpmiddleware.TokenParser, deps Ro
 
 		r.Route("/cart", func(r chi.Router) {
 			r.Group(func(r chi.Router) {
-				r.Use(httpmiddleware.Auth(tokenParser))
+				r.Use(httpmw.Auth(tokenParser))
 
 				r.Get("/", deps.CartHandler.GetItems)
 				r.Post("/items", deps.CartHandler.AddItem)
@@ -72,7 +72,7 @@ func NewRouter(log *slog.Logger, tokenParser httpmiddleware.TokenParser, deps Ro
 
 		r.Route("/orders", func(r chi.Router) {
 			r.Group(func(r chi.Router) {
-				r.Use(httpmiddleware.Auth(tokenParser))
+				r.Use(httpmw.Auth(tokenParser))
 				r.Get("/", deps.OrderHandler.ListByUserID)
 				r.Get("/{orderID}", deps.OrderHandler.GetByID)
 				r.Post("/", deps.OrderHandler.CreateOrder)
