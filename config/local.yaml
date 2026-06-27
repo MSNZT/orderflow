@@ -19,3 +19,10 @@ jwt:
 
 orders:
   payment_ttl: 5m
+
+yookassa:
+  api_url: "https://api.yookassa.ru/v3"
+  shop_id: ""
+  secret_key: ""
+  return_url: ""
+  request_timeout: 10s

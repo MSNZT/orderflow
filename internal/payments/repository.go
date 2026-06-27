@@ -63,8 +63,6 @@ func (r *Repository) Create(ctx context.Context, payment Payment) (*Payment, err
 				return nil, fmt.Errorf("%s: %w", op, ErrActivePaymentAlreadyExists)
 			case pgErr.ConstraintName == "ux_payments_succeeded_order":
 				return nil, fmt.Errorf("%s: %w", op, ErrSucceededPaymentAlreadyExists)
-			case pgErr.ConstraintName == "payments_provider_payment_id_key":
-				return nil, fmt.Errorf("%s: %w", op, err)
 			}
 		}
 		return nil, fmt.Errorf("%s: %w", op, err)

@@ -13,6 +13,7 @@ type Config struct {
 	Postgres PostgresConfig `yaml:"postgres"`
 	JWT      JWTConfig      `yaml:"jwt"`
 	Orders   OrdersConfig   `yaml:"orders"`
+	Yookassa YookassaConfig `yaml:"yookassa"`
 }
 
 type HTTPConfig struct {
@@ -39,6 +40,14 @@ type JWTConfig struct {
 
 type OrdersConfig struct {
 	PaymentTTL time.Duration `yaml:"payment_ttl" env:"PAYMENT_TTL"`
+}
+
+type YookassaConfig struct {
+	APIURL         string        `yaml:"api_url" env:"YOOKASSA_API_URL"`
+	ShopID         string        `yaml:"shop_id" env:"YOOKASSA_SHOP_ID"`
+	SecretKey      string        `yaml:"secret_key" env:"YOOKASSA_SECRET_KEY"`
+	ReturnURL      string        `yaml:"return_url" env:"YOOKASSA_RETURN_URL"`
+	RequestTimeout time.Duration `yaml:"request_timeout" env:"YOOKASSA_REQUEST_TIMEOUT"`
 }
 
 func Load() (*Config, error) {

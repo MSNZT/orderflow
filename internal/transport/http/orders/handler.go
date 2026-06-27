@@ -33,11 +33,11 @@ type createOrderRequest struct {
 }
 
 type orderBaseInfo struct {
-<<<<<<< HEAD:internal/transport/http/orders/handler.go
 	ID              uuid.UUID        `json:"id"`
 	Status          ordersapp.Status `json:"status"`
 	TotalPriceCents int64            `json:"total_price_cents"`
 	Currency        string           `json:"currency"`
+	ExpiresAt       time.Time        `json:"expires_at"`
 	CreatedAt       time.Time        `json:"created_at"`
 	UpdatedAt       time.Time        `json:"updated_at"`
 }
@@ -47,25 +47,8 @@ type createOrderResponse struct {
 	Status          ordersapp.Status `json:"status"`
 	TotalPriceCents int64            `json:"total_price_cents"`
 	Currency        string           `json:"currency"`
+	ExpiresAt       time.Time        `json:"expires_at"`
 	CreatedAt       time.Time        `json:"created_at"`
-=======
-	ID              uuid.UUID `json:"id"`
-	Status          Status    `json:"status"`
-	TotalPriceCents int64     `json:"total_price_cents"`
-	Currency        string    `json:"currency"`
-	ExpiresAt       time.Time `json:"expires_at"`
-	CreatedAt       time.Time `json:"created_at"`
-	UpdatedAt       time.Time `json:"updated_at"`
-}
-
-type createOrderResponse struct {
-	ID              uuid.UUID `json:"id"`
-	Status          Status    `json:"status"`
-	TotalPriceCents int64     `json:"total_price_cents"`
-	Currency        string    `json:"currency"`
-	ExpiresAt       time.Time `json:"expires_at"`
-	CreatedAt       time.Time `json:"created_at"`
->>>>>>> 2e409d5 (feat: add payment repository foundation):internal/orders/handler.go
 }
 
 type getOrdersResponse struct {
