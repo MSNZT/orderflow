@@ -10,7 +10,6 @@ import (
 	"github.com/MSNZT/orderflow/internal/auth"
 	"github.com/MSNZT/orderflow/internal/cart"
 	"github.com/MSNZT/orderflow/internal/config"
-	"github.com/MSNZT/orderflow/internal/httpserver"
 	"github.com/MSNZT/orderflow/internal/inventory"
 	"github.com/MSNZT/orderflow/internal/logger"
 	"github.com/MSNZT/orderflow/internal/orders"
@@ -20,6 +19,7 @@ import (
 	"github.com/MSNZT/orderflow/internal/token"
 	"github.com/MSNZT/orderflow/internal/transport/http/health"
 	"github.com/MSNZT/orderflow/internal/transport/http/router"
+	"github.com/MSNZT/orderflow/internal/transport/http/server"
 	"github.com/MSNZT/orderflow/internal/users"
 )
 
@@ -76,9 +76,9 @@ func main() {
 		OrderHandler:    orderHandler,
 	})
 
-	server := httpserver.New(cfg, log, router)
+	srv := server.New(cfg, log, router)
 
-	if err := server.Run(ctx); err != nil {
+	if err := srv.Run(ctx); err != nil {
 		log.Error("application failed", slog.String("error", err.Error()))
 		os.Exit(1)
 	}
