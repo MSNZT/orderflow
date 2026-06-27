@@ -8,7 +8,7 @@ import (
 	"net/url"
 	"strconv"
 
-	"github.com/MSNZT/orderflow/internal/authcontext"
+	"github.com/MSNZT/orderflow/internal/transport/http/authcontext"
 	"github.com/MSNZT/orderflow/internal/transport/http/response"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"

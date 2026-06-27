@@ -6,8 +6,8 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/MSNZT/orderflow/internal/authcontext"
 	"github.com/MSNZT/orderflow/internal/sessions"
+	"github.com/MSNZT/orderflow/internal/transport/http/authcontext"
 	"github.com/MSNZT/orderflow/internal/transport/http/response"
 	"github.com/MSNZT/orderflow/internal/users"
 )
