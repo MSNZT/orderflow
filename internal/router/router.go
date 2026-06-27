@@ -6,9 +6,9 @@ import (
 
 	"github.com/MSNZT/orderflow/internal/auth"
 	"github.com/MSNZT/orderflow/internal/cart"
-	"github.com/MSNZT/orderflow/internal/health"
 	"github.com/MSNZT/orderflow/internal/orders"
 	"github.com/MSNZT/orderflow/internal/products"
+	"github.com/MSNZT/orderflow/internal/transport/http/health"
 	"github.com/MSNZT/orderflow/internal/transport/http/httpmw"
 	"github.com/MSNZT/orderflow/internal/users"
 	"github.com/go-chi/chi/v5"

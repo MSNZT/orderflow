@@ -10,7 +10,6 @@ import (
 	"github.com/MSNZT/orderflow/internal/auth"
 	"github.com/MSNZT/orderflow/internal/cart"
 	"github.com/MSNZT/orderflow/internal/config"
-	"github.com/MSNZT/orderflow/internal/health"
 	"github.com/MSNZT/orderflow/internal/httpserver"
 	"github.com/MSNZT/orderflow/internal/inventory"
 	"github.com/MSNZT/orderflow/internal/logger"
@@ -20,6 +19,7 @@ import (
 	"github.com/MSNZT/orderflow/internal/router"
 	"github.com/MSNZT/orderflow/internal/sessions"
 	"github.com/MSNZT/orderflow/internal/token"
+	"github.com/MSNZT/orderflow/internal/transport/http/health"
 	"github.com/MSNZT/orderflow/internal/users"
 )
 
