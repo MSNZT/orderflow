@@ -16,10 +16,10 @@ import (
 	"github.com/MSNZT/orderflow/internal/orders"
 	"github.com/MSNZT/orderflow/internal/platform/postgres"
 	"github.com/MSNZT/orderflow/internal/products"
-	"github.com/MSNZT/orderflow/internal/router"
 	"github.com/MSNZT/orderflow/internal/sessions"
 	"github.com/MSNZT/orderflow/internal/token"
 	"github.com/MSNZT/orderflow/internal/transport/http/health"
+	"github.com/MSNZT/orderflow/internal/transport/http/router"
 	"github.com/MSNZT/orderflow/internal/users"
 )
 
