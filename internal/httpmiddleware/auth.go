@@ -6,8 +6,8 @@ import (
 	"strings"
 
 	"github.com/MSNZT/orderflow/internal/authcontext"
-	"github.com/MSNZT/orderflow/internal/httpresponse"
 	"github.com/MSNZT/orderflow/internal/token"
+	"github.com/MSNZT/orderflow/internal/transport/http/response"
 	"github.com/MSNZT/orderflow/internal/users"
 	"github.com/google/uuid"
 )
@@ -21,19 +21,19 @@ func Auth(tokenParser TokenParser) func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			accessToken, err := extractAuthorizationToken(r)
 			if err != nil {
-				_ = httpresponse.Error(w, http.StatusUnauthorized, "unauthorized")
+				_ = response.Error(w, http.StatusUnauthorized, "unauthorized")
 				return
 			}
 
 			claims, err := tokenParser.ParseAccessToken(accessToken)
 			if err != nil {
-				_ = httpresponse.Error(w, http.StatusUnauthorized, "unauthorized")
+				_ = response.Error(w, http.StatusUnauthorized, "unauthorized")
 				return
 			}
 
 			userID, err := uuid.Parse(claims.Subject)
 			if err != nil {
-				_ = httpresponse.Error(w, http.StatusUnauthorized, "unauthorized")
+				_ = response.Error(w, http.StatusUnauthorized, "unauthorized")
 				return
 			}
 

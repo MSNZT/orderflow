@@ -7,8 +7,8 @@ import (
 	"net/http"
 
 	"github.com/MSNZT/orderflow/internal/authcontext"
-	"github.com/MSNZT/orderflow/internal/httpresponse"
 	"github.com/MSNZT/orderflow/internal/sessions"
+	"github.com/MSNZT/orderflow/internal/transport/http/response"
 	"github.com/MSNZT/orderflow/internal/users"
 )
 
@@ -61,7 +61,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	var req registerRequest
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		_ = httpresponse.Error(w, http.StatusBadRequest, "invalid request body")
+		_ = response.Error(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
@@ -69,17 +69,17 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		switch {
 		case errors.Is(err, users.ErrInvalidEmail):
-			_ = httpresponse.Error(w, http.StatusBadRequest, "invalid email")
+			_ = response.Error(w, http.StatusBadRequest, "invalid email")
 			return
 		case errors.Is(err, users.ErrInvalidPassword):
-			_ = httpresponse.Error(w, http.StatusBadRequest, "invalid password")
+			_ = response.Error(w, http.StatusBadRequest, "invalid password")
 			return
 		case errors.Is(err, users.ErrEmailAlreadyUsed):
-			_ = httpresponse.Error(w, http.StatusConflict, "email already used")
+			_ = response.Error(w, http.StatusConflict, "email already used")
 			return
 		default:
 			h.log.Error("failed to register user", slog.String("op", op), slog.String("error", err.Error()))
-			_ = httpresponse.Error(w, http.StatusInternalServerError, "internal server error")
+			_ = response.Error(w, http.StatusInternalServerError, "internal server error")
 		}
 		return
 	}
@@ -90,9 +90,9 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		Role:  user.Role,
 	}
 
-	if err := httpresponse.JSON(w, http.StatusCreated, res); err != nil {
+	if err := response.JSON(w, http.StatusCreated, res); err != nil {
 		h.log.Error("failed to send register response", slog.String("op", op), slog.String("error", err.Error()))
-		_ = httpresponse.Error(w, http.StatusInternalServerError, "internal server error")
+		_ = response.Error(w, http.StatusInternalServerError, "internal server error")
 	}
 }
 
@@ -101,7 +101,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 
 	var req loginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		_ = httpresponse.Error(w, http.StatusBadRequest, "invalid request body")
+		_ = response.Error(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
@@ -111,11 +111,11 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		switch {
 		case errors.Is(err, users.ErrInvalidCredentials):
-			_ = httpresponse.Error(w, http.StatusUnauthorized, "invalid credentials")
+			_ = response.Error(w, http.StatusUnauthorized, "invalid credentials")
 			return
 		default:
 			h.log.Error("failed to login user", slog.String("op", op), slog.String("error", err.Error()))
-			_ = httpresponse.Error(w, http.StatusInternalServerError, "internal server error")
+			_ = response.Error(w, http.StatusInternalServerError, "internal server error")
 			return
 		}
 	}
@@ -132,9 +132,9 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 
 	setRefreshToken(w, loginResult.RefreshToken, loginResult.RefreshTokenTTL)
 
-	if err := httpresponse.JSON(w, http.StatusOK, res); err != nil {
+	if err := response.JSON(w, http.StatusOK, res); err != nil {
 		h.log.Error("failed to send login response", slog.String("op", op), slog.String("error", err.Error()))
-		_ = httpresponse.Error(w, http.StatusInternalServerError, "internal server error")
+		_ = response.Error(w, http.StatusInternalServerError, "internal server error")
 	}
 }
 
@@ -144,7 +144,7 @@ func (h *Handler) Me(w http.ResponseWriter, r *http.Request) {
 	userID, ok := authcontext.UserID(r.Context())
 
 	if !ok {
-		_ = httpresponse.Error(w, http.StatusUnauthorized, "unauthorized")
+		_ = response.Error(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
 
@@ -152,11 +152,11 @@ func (h *Handler) Me(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		switch {
 		case errors.Is(err, users.ErrUnauthorized):
-			_ = httpresponse.Error(w, http.StatusUnauthorized, "unauthorized")
+			_ = response.Error(w, http.StatusUnauthorized, "unauthorized")
 			return
 		default:
 			h.log.Error("failed to get user", slog.String("op", op), slog.String("error", err.Error()))
-			_ = httpresponse.Error(w, http.StatusInternalServerError, "internal server error")
+			_ = response.Error(w, http.StatusInternalServerError, "internal server error")
 			return
 		}
 	}
@@ -167,9 +167,9 @@ func (h *Handler) Me(w http.ResponseWriter, r *http.Request) {
 		Role:  user.Role,
 	}
 
-	if err := httpresponse.JSON(w, http.StatusOK, res); err != nil {
+	if err := response.JSON(w, http.StatusOK, res); err != nil {
 		h.log.Error("failed to send me response", slog.String("op", op), slog.String("error", err.Error()))
-		_ = httpresponse.Error(w, http.StatusInternalServerError, "internal server error")
+		_ = response.Error(w, http.StatusInternalServerError, "internal server error")
 		return
 	}
 
@@ -181,17 +181,17 @@ func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 	cookie, err := r.Cookie("refresh_token")
 	if err != nil {
 		if errors.Is(err, http.ErrNoCookie) {
-			_ = httpresponse.Error(w, http.StatusUnauthorized, "unauthorized")
+			_ = response.Error(w, http.StatusUnauthorized, "unauthorized")
 			return
 		}
 
 		h.log.Error("failed to get refresh token from cookie", slog.String("op", op), slog.String("error", err.Error()))
-		_ = httpresponse.Error(w, http.StatusInternalServerError, "internal server error")
+		_ = response.Error(w, http.StatusInternalServerError, "internal server error")
 		return
 	}
 
 	if cookie.Value == "" {
-		_ = httpresponse.Error(w, http.StatusUnauthorized, "unauthorized")
+		_ = response.Error(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
 
@@ -203,11 +203,11 @@ func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 			errors.Is(err, sessions.ErrSessionRevoked),
 			errors.Is(err, users.ErrUserNotFound):
 			clearRefreshCookie(w)
-			_ = httpresponse.Error(w, http.StatusUnauthorized, "unauthorized")
+			_ = response.Error(w, http.StatusUnauthorized, "unauthorized")
 			return
 		default:
 			h.log.Error("failed to update refresh session", slog.String("op", op), slog.String("error", err.Error()))
-			_ = httpresponse.Error(w, http.StatusInternalServerError, "internal server error")
+			_ = response.Error(w, http.StatusInternalServerError, "internal server error")
 			return
 		}
 	}
@@ -218,9 +218,9 @@ func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 		ExpiresIn:   int(refreshResult.AccessTokenTTL.Seconds()),
 	}
 
-	if err := httpresponse.JSON(w, http.StatusOK, res); err != nil {
+	if err := response.JSON(w, http.StatusOK, res); err != nil {
 		h.log.Error("failed to send refresh response", slog.String("op", op), slog.String("error", err.Error()))
-		_ = httpresponse.Error(w, http.StatusInternalServerError, "internal server error")
+		_ = response.Error(w, http.StatusInternalServerError, "internal server error")
 	}
 }
 
@@ -230,7 +230,7 @@ func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 
 	if err != nil || cookie.Value == "" {
 		clearRefreshCookie(w)
-		httpresponse.NoContent(w)
+		response.NoContent(w)
 		return
 	}
 
@@ -238,10 +238,10 @@ func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 		clearRefreshCookie(w)
 
 		h.log.Error("failed to logout", slog.String("op", op), slog.String("error", err.Error()))
-		_ = httpresponse.Error(w, http.StatusInternalServerError, "internal server error")
+		_ = response.Error(w, http.StatusInternalServerError, "internal server error")
 		return
 	}
 
 	clearRefreshCookie(w)
-	httpresponse.NoContent(w)
+	response.NoContent(w)
 }

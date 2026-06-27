@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/MSNZT/orderflow/internal/httpresponse"
+	"github.com/MSNZT/orderflow/internal/transport/http/response"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -20,8 +20,8 @@ func NewHandler(log *slog.Logger, dbPool *pgxpool.Pool) *Handler {
 }
 
 func (h *Handler) Live(w http.ResponseWriter, r *http.Request) {
-	_ = httpresponse.JSON(w, http.StatusOK, httpresponse.StatusResponse{
-		Status: httpresponse.StatusOK,
+	_ = response.JSON(w, http.StatusOK, response.StatusResponse{
+		Status: response.StatusOK,
 	})
 }
 
@@ -31,13 +31,13 @@ func (h *Handler) Ready(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.dbPool.Ping(ctx); err != nil {
 		h.log.Warn("postgres readiness check failed", slog.String("error", err.Error()))
-		_ = httpresponse.JSON(w, http.StatusServiceUnavailable, httpresponse.StatusResponse{
-			Status: httpresponse.StatusError,
+		_ = response.JSON(w, http.StatusServiceUnavailable, response.StatusResponse{
+			Status: response.StatusError,
 		})
 		return
 	}
 
-	_ = httpresponse.JSON(w, http.StatusOK, httpresponse.StatusResponse{
-		Status: httpresponse.StatusOK,
+	_ = response.JSON(w, http.StatusOK, response.StatusResponse{
+		Status: response.StatusOK,
 	})
 }

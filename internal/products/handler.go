@@ -6,7 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/MSNZT/orderflow/internal/httpresponse"
+	"github.com/MSNZT/orderflow/internal/transport/http/response"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 )
@@ -46,7 +46,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	products, err := h.service.List(r.Context())
 	if err != nil {
 		h.log.Error("failed to get product list", slog.String("op", op), slog.String("error", err.Error()))
-		httpresponse.Error(w, http.StatusInternalServerError, "internal server error")
+		response.Error(w, http.StatusInternalServerError, "internal server error")
 		return
 	}
 
@@ -55,9 +55,9 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 		respProducts[i] = toProductResponse(p)
 	}
 
-	if err := httpresponse.JSON(w, http.StatusOK, listResponse{Products: respProducts}); err != nil {
+	if err := response.JSON(w, http.StatusOK, listResponse{Products: respProducts}); err != nil {
 		h.log.Error("failed to send json response", slog.String("op", op), slog.String("error", err.Error()))
-		httpresponse.Error(w, http.StatusInternalServerError, "internal server error")
+		response.Error(w, http.StatusInternalServerError, "internal server error")
 		return
 	}
 }
@@ -68,7 +68,7 @@ func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
 	paramId := chi.URLParam(r, "id")
 	id, err := uuid.Parse(paramId)
 	if err != nil {
-		httpresponse.Error(w, http.StatusBadRequest, "invalid id")
+		response.Error(w, http.StatusBadRequest, "invalid id")
 		return
 	}
 
@@ -76,18 +76,18 @@ func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		switch {
 		case errors.Is(err, ErrProductNotFound):
-			httpresponse.Error(w, http.StatusNotFound, "product not found")
+			response.Error(w, http.StatusNotFound, "product not found")
 			return
 		default:
 			h.log.Error("failed to get product by id", slog.String("op", op), slog.String("error", err.Error()))
-			httpresponse.Error(w, http.StatusInternalServerError, "internal server error")
+			response.Error(w, http.StatusInternalServerError, "internal server error")
 			return
 		}
 	}
 
-	if err := httpresponse.JSON(w, http.StatusOK, toProductResponse(*product)); err != nil {
+	if err := response.JSON(w, http.StatusOK, toProductResponse(*product)); err != nil {
 		h.log.Error("failed to send json response", slog.String("op", op), slog.String("error", err.Error()))
-		httpresponse.Error(w, http.StatusInternalServerError, "internal server error")
+		response.Error(w, http.StatusInternalServerError, "internal server error")
 		return
 	}
 }
@@ -97,7 +97,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 
 	var req productCreateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		httpresponse.Error(w, http.StatusBadRequest, "invalid body")
+		response.Error(w, http.StatusBadRequest, "invalid body")
 		return
 	}
 
@@ -113,30 +113,30 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		switch {
 		case errors.Is(err, ErrProductNameInvalid):
-			httpresponse.Error(w, http.StatusUnprocessableEntity, ErrProductNameInvalid.Error())
+			response.Error(w, http.StatusUnprocessableEntity, ErrProductNameInvalid.Error())
 			return
 		case errors.Is(err, ErrProductPriceCentsInvalid):
-			httpresponse.Error(w, http.StatusUnprocessableEntity, ErrProductPriceCentsInvalid.Error())
+			response.Error(w, http.StatusUnprocessableEntity, ErrProductPriceCentsInvalid.Error())
 			return
 		case errors.Is(err, ErrProductCurrencyInvalid):
-			httpresponse.Error(w, http.StatusUnprocessableEntity, ErrProductCurrencyInvalid.Error())
+			response.Error(w, http.StatusUnprocessableEntity, ErrProductCurrencyInvalid.Error())
 			return
 		case errors.Is(err, ErrInitialQuantityInvalid):
-			httpresponse.Error(w, http.StatusUnprocessableEntity, ErrInitialQuantityInvalid.Error())
+			response.Error(w, http.StatusUnprocessableEntity, ErrInitialQuantityInvalid.Error())
 			return
 		case errors.Is(err, ErrProductAlreadyExists):
-			httpresponse.Error(w, http.StatusConflict, ErrProductAlreadyExists.Error())
+			response.Error(w, http.StatusConflict, ErrProductAlreadyExists.Error())
 			return
 		default:
 			h.log.Error("failed to create product", slog.String("op", op), slog.String("err", err.Error()))
-			httpresponse.Error(w, http.StatusInternalServerError, "internal server error")
+			response.Error(w, http.StatusInternalServerError, "internal server error")
 			return
 		}
 	}
 
-	if err = httpresponse.JSON(w, http.StatusCreated, toProductResponse(*product)); err != nil {
+	if err = response.JSON(w, http.StatusCreated, toProductResponse(*product)); err != nil {
 		h.log.Error("failed to send product response", slog.String("op", op), slog.String("err", err.Error()))
-		httpresponse.Error(w, http.StatusInternalServerError, "internal server error")
+		response.Error(w, http.StatusInternalServerError, "internal server error")
 		return
 	}
 }

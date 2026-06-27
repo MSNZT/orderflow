@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/MSNZT/orderflow/internal/authcontext"
-	"github.com/MSNZT/orderflow/internal/httpresponse"
+	"github.com/MSNZT/orderflow/internal/transport/http/response"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 )
@@ -78,13 +78,13 @@ func (h *Handler) CreateOrder(w http.ResponseWriter, r *http.Request) {
 
 	userID, ok := authcontext.UserID(r.Context())
 	if !ok {
-		httpresponse.Unauthorized(w)
+		response.Unauthorized(w)
 		return
 	}
 
 	var reqCreateOrder createOrderRequest
 	if err := json.NewDecoder(r.Body).Decode(&reqCreateOrder); err != nil {
-		httpresponse.BadRequest(w)
+		response.BadRequest(w)
 		return
 	}
 
@@ -102,9 +102,9 @@ func (h *Handler) CreateOrder(w http.ResponseWriter, r *http.Request) {
 		CreatedAt:       order.CreatedAt,
 	}
 
-	if err := httpresponse.JSON(w, http.StatusCreated, res); err != nil {
+	if err := response.JSON(w, http.StatusCreated, res); err != nil {
 		h.log.Error("failed to send create order response", slog.String("op", op), slog.String("err", err.Error()))
-		httpresponse.InternalError(w)
+		response.InternalError(w)
 		return
 	}
 }
@@ -114,14 +114,14 @@ func (h *Handler) ListByUserID(w http.ResponseWriter, r *http.Request) {
 
 	userID, ok := authcontext.UserID(r.Context())
 	if !ok {
-		httpresponse.Unauthorized(w)
+		response.Unauthorized(w)
 		return
 	}
 
 	queryParams := r.URL.Query()
 	page, ok := parsePagination(queryParams, "page")
 	if !ok {
-		httpresponse.BadRequestMsg(w, "invalid query params")
+		response.BadRequestMsg(w, "invalid query params")
 		return
 	}
 
@@ -131,7 +131,7 @@ func (h *Handler) ListByUserID(w http.ResponseWriter, r *http.Request) {
 
 	limit, ok := parsePagination(queryParams, "limit")
 	if !ok {
-		httpresponse.BadRequestMsg(w, "invalid query params")
+		response.BadRequestMsg(w, "invalid query params")
 		return
 	}
 
@@ -146,20 +146,20 @@ func (h *Handler) ListByUserID(w http.ResponseWriter, r *http.Request) {
 	orders, err := h.service.ListByUserID(r.Context(), userID, page, limit)
 	if err != nil {
 		if errors.Is(err, ErrUserIDIsNil) {
-			httpresponse.Unauthorized(w)
+			response.Unauthorized(w)
 			return
 		}
 
 		h.log.Error("failed to get orders", slog.String("op", op), slog.String("err", err.Error()))
-		httpresponse.InternalError(w)
+		response.InternalError(w)
 		return
 	}
 
 	res := toOrdersResponse(orders, page, limit)
 
-	if err := httpresponse.JSON(w, http.StatusOK, res); err != nil {
+	if err := response.JSON(w, http.StatusOK, res); err != nil {
 		h.log.Error("failed to send response orders", slog.String("op", op), slog.String("err", err.Error()))
-		httpresponse.InternalError(w)
+		response.InternalError(w)
 		return
 	}
 
@@ -170,14 +170,14 @@ func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
 
 	userID, ok := authcontext.UserID(r.Context())
 	if !ok {
-		httpresponse.Unauthorized(w)
+		response.Unauthorized(w)
 		return
 	}
 
 	urlOrderID := chi.URLParam(r, "orderID")
 	orderID, err := uuid.Parse(urlOrderID)
 	if err != nil {
-		httpresponse.BadRequestMsg(w, "invalid order id")
+		response.BadRequestMsg(w, "invalid order id")
 		return
 	}
 
@@ -185,26 +185,26 @@ func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		switch {
 		case errors.Is(err, ErrUserIDIsNil):
-			httpresponse.Unauthorized(w)
+			response.Unauthorized(w)
 			return
 		case errors.Is(err, ErrOrderIDIsNil):
-			httpresponse.BadRequestMsg(w, "invalid order id")
+			response.BadRequestMsg(w, "invalid order id")
 			return
 		case errors.Is(err, ErrOrderNotFound):
-			httpresponse.Error(w, http.StatusNotFound, "order not found")
+			response.Error(w, http.StatusNotFound, "order not found")
 			return
 		default:
 			h.log.Error("failed to get order by id", slog.String("op", op), slog.String("err", err.Error()))
-			httpresponse.InternalError(w)
+			response.InternalError(w)
 			return
 		}
 	}
 
 	res := toOrderResponse(orderDetails)
 
-	if err := httpresponse.JSON(w, http.StatusOK, res); err != nil {
+	if err := response.JSON(w, http.StatusOK, res); err != nil {
 		h.log.Error("failed to send order response", slog.String("op", op), slog.String("err", err.Error()))
-		httpresponse.InternalError(w)
+		response.InternalError(w)
 		return
 	}
 
@@ -213,40 +213,40 @@ func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
 func writeCreateOrderError(w http.ResponseWriter, err error, log *slog.Logger, op string) {
 	switch {
 	case errors.Is(err, ErrUserIDIsNil):
-		httpresponse.Unauthorized(w)
+		response.Unauthorized(w)
 		return
 	case errors.Is(err, ErrProductIDsEmpty):
-		httpresponse.BadRequestMsg(w, "product_ids must not be empty")
+		response.BadRequestMsg(w, "product_ids must not be empty")
 		return
 	case errors.Is(err, ErrProductIDIsNil):
-		httpresponse.BadRequestMsg(w, "product_ids contains an empty UUID")
+		response.BadRequestMsg(w, "product_ids contains an empty UUID")
 		return
 	case errors.Is(err, ErrDuplicateProductID):
-		httpresponse.BadRequestMsg(w, "product_ids contains duplicates")
+		response.BadRequestMsg(w, "product_ids contains duplicates")
 		return
 	case errors.Is(err, ErrCartChanged):
-		httpresponse.Error(
+		response.Error(
 			w,
 			http.StatusConflict,
 			"cart contents changed, refresh the cart and try again",
 		)
 		return
 	case errors.Is(err, ErrProductInactive):
-		httpresponse.Error(
+		response.Error(
 			w,
 			http.StatusConflict,
 			"one or more selected products are unavailable",
 		)
 		return
 	case errors.Is(err, ErrCurrencyMismatch):
-		httpresponse.Error(
+		response.Error(
 			w,
 			http.StatusConflict,
 			"selected products have different currencies",
 		)
 		return
 	case errors.Is(err, ErrInsufficientStock):
-		httpresponse.Error(
+		response.Error(
 			w,
 			http.StatusConflict,
 			"insufficient stock for one or more selected products",
@@ -258,11 +258,11 @@ func writeCreateOrderError(w http.ResponseWriter, err error, log *slog.Logger, o
 			slog.String("op", op),
 			slog.String("err", err.Error()),
 		)
-		httpresponse.InternalError(w)
+		response.InternalError(w)
 		return
 	default:
 		log.Error("failed to create order", slog.String("op", op), slog.String("err", err.Error()))
-		httpresponse.InternalError(w)
+		response.InternalError(w)
 		return
 	}
 }
