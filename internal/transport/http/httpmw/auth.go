@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/MSNZT/orderflow/internal/token"
+	"github.com/MSNZT/orderflow/internal/infrastructure/token"
 	"github.com/MSNZT/orderflow/internal/transport/http/authcontext"
 	"github.com/MSNZT/orderflow/internal/transport/http/response"
 	"github.com/MSNZT/orderflow/internal/users"

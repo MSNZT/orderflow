@@ -7,8 +7,8 @@ import (
 	"net"
 	"time"
 
+	"github.com/MSNZT/orderflow/internal/infrastructure/token"
 	"github.com/MSNZT/orderflow/internal/sessions"
-	"github.com/MSNZT/orderflow/internal/token"
 	"github.com/MSNZT/orderflow/internal/users"
 	"github.com/google/uuid"
 )
