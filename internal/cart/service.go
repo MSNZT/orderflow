@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/MSNZT/orderflow/internal/platform/postgres"
+	"github.com/MSNZT/orderflow/internal/infrastructure/postgres"
 	"github.com/MSNZT/orderflow/internal/products"
 	"github.com/google/uuid"
 )

@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/MSNZT/orderflow/internal/infrastructure/postgres"
 	"github.com/MSNZT/orderflow/internal/inventory"
-	"github.com/MSNZT/orderflow/internal/platform/postgres"
 	"github.com/google/uuid"
 )
 
