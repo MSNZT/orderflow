@@ -1,18 +1,32 @@
 package products
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"log/slog"
 	"net/http"
 
+	"github.com/MSNZT/orderflow/internal/app/products"
 	"github.com/MSNZT/orderflow/internal/transport/http/response"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 )
 
+type Service interface {
+	List(ctx context.Context) ([]products.Product, error)
+	GetByID(
+		ctx context.Context,
+		productID uuid.UUID,
+	) (*products.Product, error)
+	Create(
+		ctx context.Context,
+		input products.CreateInput,
+	) (*products.Product, error)
+}
+
 type Handler struct {
-	service *Service
+	service Service
 	log     *slog.Logger
 }
 
@@ -36,7 +50,7 @@ type productCreateRequest struct {
 	InitialQuantity int32   `json:"initial_quantity"`
 }
 
-func NewHandler(log *slog.Logger, service *Service) *Handler {
+func NewHandler(log *slog.Logger, service *products.Service) *Handler {
 	return &Handler{log: log, service: service}
 }
 
@@ -75,7 +89,7 @@ func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
 	product, err := h.service.GetByID(r.Context(), id)
 	if err != nil {
 		switch {
-		case errors.Is(err, ErrProductNotFound):
+		case errors.Is(err, products.ErrProductNotFound):
 			response.Error(w, http.StatusNotFound, "product not found")
 			return
 		default:
@@ -101,7 +115,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	input := createInput{
+	input := products.CreateInput{
 		Name:            req.Name,
 		Description:     req.Description,
 		PriceCents:      req.PriceCents,
@@ -112,20 +126,20 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	product, err := h.service.Create(r.Context(), input)
 	if err != nil {
 		switch {
-		case errors.Is(err, ErrProductNameInvalid):
-			response.Error(w, http.StatusUnprocessableEntity, ErrProductNameInvalid.Error())
+		case errors.Is(err, products.ErrProductNameInvalid):
+			response.Error(w, http.StatusUnprocessableEntity, products.ErrProductNameInvalid.Error())
 			return
-		case errors.Is(err, ErrProductPriceCentsInvalid):
-			response.Error(w, http.StatusUnprocessableEntity, ErrProductPriceCentsInvalid.Error())
+		case errors.Is(err, products.ErrProductPriceCentsInvalid):
+			response.Error(w, http.StatusUnprocessableEntity, products.ErrProductPriceCentsInvalid.Error())
 			return
-		case errors.Is(err, ErrProductCurrencyInvalid):
-			response.Error(w, http.StatusUnprocessableEntity, ErrProductCurrencyInvalid.Error())
+		case errors.Is(err, products.ErrProductCurrencyInvalid):
+			response.Error(w, http.StatusUnprocessableEntity, products.ErrProductCurrencyInvalid.Error())
 			return
-		case errors.Is(err, ErrInitialQuantityInvalid):
-			response.Error(w, http.StatusUnprocessableEntity, ErrInitialQuantityInvalid.Error())
+		case errors.Is(err, products.ErrInitialQuantityInvalid):
+			response.Error(w, http.StatusUnprocessableEntity, products.ErrInitialQuantityInvalid.Error())
 			return
-		case errors.Is(err, ErrProductAlreadyExists):
-			response.Error(w, http.StatusConflict, ErrProductAlreadyExists.Error())
+		case errors.Is(err, products.ErrProductAlreadyExists):
+			response.Error(w, http.StatusConflict, products.ErrProductAlreadyExists.Error())
 			return
 		default:
 			h.log.Error("failed to create product", slog.String("op", op), slog.String("err", err.Error()))
@@ -141,7 +155,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func toProductResponse(p Product) productResponse {
+func toProductResponse(p products.Product) productResponse {
 	return productResponse{
 		ID:          p.ID,
 		Name:        p.Name,

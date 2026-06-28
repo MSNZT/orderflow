@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	productsapp "github.com/MSNZT/orderflow/internal/app/products"
 	"github.com/MSNZT/orderflow/internal/infrastructure/postgres"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -15,11 +16,13 @@ type Repository struct {
 	db postgres.DBTX
 }
 
+var _ productsapp.Repository = (*Repository)(nil)
+
 func NewRepository(db postgres.DBTX) *Repository {
 	return &Repository{db: db}
 }
 
-func (r *Repository) ListActive(ctx context.Context) ([]Product, error) {
+func (r *Repository) ListActive(ctx context.Context) ([]productsapp.Product, error) {
 	const op = "products.repository.ListActive"
 
 	query := `
@@ -46,10 +49,10 @@ func (r *Repository) ListActive(ctx context.Context) ([]Product, error) {
 	}
 	defer rows.Close()
 
-	var products = make([]Product, 0)
+	var products = make([]productsapp.Product, 0)
 
 	for rows.Next() {
-		var p Product
+		var p productsapp.Product
 		if err := rows.Scan(&p.ID, &p.Name, &p.Description, &p.PriceCents,
 			&p.Currency, &p.IsActive, &p.CreatedAt, &p.UpdatedAt); err != nil {
 			return nil, fmt.Errorf("%s: %w", op, err)
@@ -64,7 +67,7 @@ func (r *Repository) ListActive(ctx context.Context) ([]Product, error) {
 	return products, nil
 }
 
-func (r *Repository) GetByID(ctx context.Context, id uuid.UUID) (*Product, error) {
+func (r *Repository) GetByID(ctx context.Context, id uuid.UUID) (*productsapp.Product, error) {
 	const op = "products.repository.GetByID"
 
 	query := `
@@ -80,7 +83,7 @@ func (r *Repository) GetByID(ctx context.Context, id uuid.UUID) (*Product, error
 		FROM products
 		WHERE id = $1 AND is_active = true;
 	`
-	var p Product
+	var p productsapp.Product
 
 	db := postgres.ExecutorFromContext(ctx, r.db)
 
@@ -89,7 +92,7 @@ func (r *Repository) GetByID(ctx context.Context, id uuid.UUID) (*Product, error
 		&p.Currency, &p.IsActive, &p.CreatedAt, &p.UpdatedAt); err != nil {
 
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, ErrProductNotFound
+			return nil, productsapp.ErrProductNotFound
 		}
 
 		return nil, fmt.Errorf("%s: %w", op, err)
@@ -98,7 +101,7 @@ func (r *Repository) GetByID(ctx context.Context, id uuid.UUID) (*Product, error
 	return &p, nil
 }
 
-func (r *Repository) Create(ctx context.Context, p *Product) (*Product, error) {
+func (r *Repository) Create(ctx context.Context, p *productsapp.Product) (*productsapp.Product, error) {
 	const op = "products.repository.Create"
 
 	query := `
@@ -107,7 +110,7 @@ func (r *Repository) Create(ctx context.Context, p *Product) (*Product, error) {
 		RETURNING id, name, description, price_cents, currency, is_active, created_at, updated_at;
 	`
 
-	var product Product
+	var product productsapp.Product
 	db := postgres.ExecutorFromContext(ctx, r.db)
 
 	err := db.QueryRow(ctx, query,
@@ -120,7 +123,7 @@ func (r *Repository) Create(ctx context.Context, p *Product) (*Product, error) {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) {
 			if pgErr.Code == "23505" {
-				return nil, fmt.Errorf("%s: %w", op, ErrProductAlreadyExists)
+				return nil, fmt.Errorf("%s: %w", op, productsapp.ErrProductAlreadyExists)
 			}
 		}
 		return nil, fmt.Errorf("%s: %w", op, err)

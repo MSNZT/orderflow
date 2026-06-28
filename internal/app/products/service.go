@@ -5,18 +5,16 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/MSNZT/orderflow/internal/app/inventory"
-	"github.com/MSNZT/orderflow/internal/infrastructure/postgres"
 	"github.com/google/uuid"
 )
 
 type Service struct {
-	productRepo   *Repository
-	inventoryRepo inventory.Repository
-	txManager     *postgres.TxManager
+	productRepo   Repository
+	inventoryRepo InventoryRepository
+	txManager     TxManager
 }
 
-type createInput struct {
+type CreateInput struct {
 	Name            string
 	Description     *string
 	PriceCents      int64
@@ -25,9 +23,9 @@ type createInput struct {
 }
 
 func NewService(
-	productRepo *Repository,
-	inventoryRepo inventory.Repository,
-	txManager *postgres.TxManager,
+	productRepo Repository,
+	inventoryRepo InventoryRepository,
+	txManager TxManager,
 ) *Service {
 	return &Service{productRepo: productRepo, inventoryRepo: inventoryRepo, txManager: txManager}
 }
@@ -54,7 +52,7 @@ func (s *Service) GetByID(ctx context.Context, productID uuid.UUID) (*Product, e
 	return product, nil
 }
 
-func (s *Service) Create(ctx context.Context, input createInput) (*Product, error) {
+func (s *Service) Create(ctx context.Context, input CreateInput) (*Product, error) {
 	const op = "products.service.Create"
 
 	if input.Currency == "" {

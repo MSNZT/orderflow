@@ -8,6 +8,7 @@ import (
 	"syscall"
 
 	authapp "github.com/MSNZT/orderflow/internal/app/auth"
+	productsapp "github.com/MSNZT/orderflow/internal/app/products"
 	usersapp "github.com/MSNZT/orderflow/internal/app/users"
 	"github.com/MSNZT/orderflow/internal/cart"
 	"github.com/MSNZT/orderflow/internal/config"
@@ -15,13 +16,14 @@ import (
 	"github.com/MSNZT/orderflow/internal/infrastructure/password"
 	"github.com/MSNZT/orderflow/internal/infrastructure/postgres"
 	"github.com/MSNZT/orderflow/internal/infrastructure/postgres/inventory"
+	productsinfra "github.com/MSNZT/orderflow/internal/infrastructure/postgres/products"
 	"github.com/MSNZT/orderflow/internal/infrastructure/postgres/sessions"
 	usersrepo "github.com/MSNZT/orderflow/internal/infrastructure/postgres/users"
 	"github.com/MSNZT/orderflow/internal/infrastructure/token"
 	"github.com/MSNZT/orderflow/internal/orders"
-	"github.com/MSNZT/orderflow/internal/products"
 	authhttp "github.com/MSNZT/orderflow/internal/transport/http/auth"
 	"github.com/MSNZT/orderflow/internal/transport/http/health"
+	productshttp "github.com/MSNZT/orderflow/internal/transport/http/products"
 	"github.com/MSNZT/orderflow/internal/transport/http/router"
 	"github.com/MSNZT/orderflow/internal/transport/http/server"
 )
@@ -58,10 +60,10 @@ func main() {
 	authService := authapp.NewService(usersService, tokenManager, sessionsRepository, cfg.JWT.RefreshTTL)
 	authHandler := authhttp.NewHandler(log, usersService, authService)
 
-	productsRepository := products.NewRepository(dbPool)
+	productsRepository := productsinfra.NewRepository(dbPool)
 	inventoryRepository := inventory.NewRepository(dbPool)
-	productsService := products.NewService(productsRepository, inventoryRepository, txManager)
-	productsHandler := products.NewHandler(log, productsService)
+	productsService := productsapp.NewService(productsRepository, inventoryRepository, txManager)
+	productsHandler := productshttp.NewHandler(log, productsService)
 
 	cartRepository := cart.NewRepository(dbPool)
 	cartService := cart.NewService(cartRepository, txManager, productsService)
