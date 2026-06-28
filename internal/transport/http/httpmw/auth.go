@@ -1,0 +1,70 @@
+package httpmw
+
+import (
+	"fmt"
+	"net/http"
+	"strings"
+
+	"github.com/MSNZT/orderflow/internal/app/users"
+	"github.com/MSNZT/orderflow/internal/infrastructure/token"
+	"github.com/MSNZT/orderflow/internal/transport/http/authcontext"
+	"github.com/MSNZT/orderflow/internal/transport/http/response"
+	"github.com/google/uuid"
+)
+
+type TokenParser interface {
+	ParseAccessToken(accessToken string) (*token.Claims, error)
+}
+
+func Auth(tokenParser TokenParser) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			accessToken, err := extractAuthorizationToken(r)
+			if err != nil {
+				_ = response.Error(w, http.StatusUnauthorized, "unauthorized")
+				return
+			}
+
+			claims, err := tokenParser.ParseAccessToken(accessToken)
+			if err != nil {
+				_ = response.Error(w, http.StatusUnauthorized, "unauthorized")
+				return
+			}
+
+			userID, err := uuid.Parse(claims.Subject)
+			if err != nil {
+				_ = response.Error(w, http.StatusUnauthorized, "unauthorized")
+				return
+			}
+
+			role := users.Role(claims.Role)
+			ctx := authcontext.WithUser(r.Context(), userID, role)
+
+			next.ServeHTTP(w, r.WithContext(ctx))
+		})
+	}
+}
+
+func extractAuthorizationToken(r *http.Request) (string, error) {
+	authHeader := r.Header.Get("Authorization")
+
+	if authHeader == "" {
+		return "", fmt.Errorf("authorization token is missing")
+	}
+
+	scheme, token, ok := strings.Cut(authHeader, " ")
+	if !ok {
+		return "", fmt.Errorf("invalid auth header format")
+	}
+
+	if !strings.EqualFold(scheme, "Bearer") {
+		return "", fmt.Errorf("invalid authorization scheme")
+	}
+
+	token = strings.TrimSpace(token)
+	if token == "" {
+		return "", fmt.Errorf("authorization token is missing")
+	}
+
+	return token, nil
+}

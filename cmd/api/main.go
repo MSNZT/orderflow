@@ -7,20 +7,29 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/MSNZT/orderflow/internal/auth"
-	"github.com/MSNZT/orderflow/internal/cart"
+	authapp "github.com/MSNZT/orderflow/internal/app/auth"
+	cartapp "github.com/MSNZT/orderflow/internal/app/cart"
+	ordersapp "github.com/MSNZT/orderflow/internal/app/orders"
+	productsapp "github.com/MSNZT/orderflow/internal/app/products"
+	usersapp "github.com/MSNZT/orderflow/internal/app/users"
 	"github.com/MSNZT/orderflow/internal/config"
-	"github.com/MSNZT/orderflow/internal/health"
-	"github.com/MSNZT/orderflow/internal/httpserver"
-	"github.com/MSNZT/orderflow/internal/inventory"
-	"github.com/MSNZT/orderflow/internal/logger"
-	"github.com/MSNZT/orderflow/internal/orders"
-	"github.com/MSNZT/orderflow/internal/platform/postgres"
-	"github.com/MSNZT/orderflow/internal/products"
-	"github.com/MSNZT/orderflow/internal/router"
-	"github.com/MSNZT/orderflow/internal/sessions"
-	"github.com/MSNZT/orderflow/internal/token"
-	"github.com/MSNZT/orderflow/internal/users"
+	"github.com/MSNZT/orderflow/internal/infrastructure/logger"
+	"github.com/MSNZT/orderflow/internal/infrastructure/password"
+	"github.com/MSNZT/orderflow/internal/infrastructure/postgres"
+	cartrepo "github.com/MSNZT/orderflow/internal/infrastructure/postgres/cart"
+	"github.com/MSNZT/orderflow/internal/infrastructure/postgres/inventory"
+	ordersrepo "github.com/MSNZT/orderflow/internal/infrastructure/postgres/orders"
+	productsrepo "github.com/MSNZT/orderflow/internal/infrastructure/postgres/products"
+	"github.com/MSNZT/orderflow/internal/infrastructure/postgres/sessions"
+	usersrepo "github.com/MSNZT/orderflow/internal/infrastructure/postgres/users"
+	"github.com/MSNZT/orderflow/internal/infrastructure/token"
+	authhttp "github.com/MSNZT/orderflow/internal/transport/http/auth"
+	carthttp "github.com/MSNZT/orderflow/internal/transport/http/cart"
+	"github.com/MSNZT/orderflow/internal/transport/http/health"
+	ordershttp "github.com/MSNZT/orderflow/internal/transport/http/orders"
+	productshttp "github.com/MSNZT/orderflow/internal/transport/http/products"
+	"github.com/MSNZT/orderflow/internal/transport/http/router"
+	"github.com/MSNZT/orderflow/internal/transport/http/server"
 )
 
 func main() {
@@ -46,27 +55,27 @@ func main() {
 	const cost = 12
 	healthHandler := health.NewHandler(log, dbPool)
 
-	usersRepository := users.NewRepository(dbPool)
-	hasher := users.NewBcryptHasher(cost)
-	usersService := users.NewService(usersRepository, hasher)
+	usersRepository := usersrepo.NewRepository(dbPool)
+	hasher := password.NewBcryptHasher(cost)
+	usersService := usersapp.NewService(usersRepository, hasher)
 	tokenManager := token.NewManager(cfg.JWT.Secret, cfg.JWT.AccessTTL)
 
 	sessionsRepository := sessions.NewRepository(dbPool)
-	authService := auth.NewService(usersService, tokenManager, sessionsRepository, cfg.JWT.RefreshTTL)
-	authHandler := auth.NewHandler(log, usersService, authService)
+	authService := authapp.NewService(usersService, tokenManager, sessionsRepository, cfg.JWT.RefreshTTL)
+	authHandler := authhttp.NewHandler(log, usersService, authService)
 
-	productsRepository := products.NewRepository(dbPool)
+	productsRepository := productsrepo.NewRepository(dbPool)
 	inventoryRepository := inventory.NewRepository(dbPool)
-	productsService := products.NewService(productsRepository, inventoryRepository, txManager)
-	productsHandler := products.NewHandler(log, productsService)
+	productsService := productsapp.NewService(productsRepository, inventoryRepository, txManager)
+	productsHandler := productshttp.NewHandler(log, productsService)
 
-	cartRepository := cart.NewRepository(dbPool)
-	cartService := cart.NewService(cartRepository, txManager, productsService)
-	cartHandler := cart.NewHandler(log, cartService)
+	cartRepository := cartrepo.NewRepository(dbPool)
+	cartService := cartapp.NewService(cartRepository, txManager, productsService)
+	cartHandler := carthttp.NewHandler(log, cartService)
 
-	orderRepository := orders.NewRepository(dbPool)
-	orderService := orders.NewService(orderRepository, inventoryRepository, cartService, txManager)
-	orderHandler := orders.NewHandler(log, orderService)
+	orderRepository := ordersrepo.NewRepository(dbPool)
+	orderService := ordersapp.NewService(orderRepository, inventoryRepository, cartService, txManager)
+	orderHandler := ordershttp.NewHandler(log, orderService)
 
 	router := router.NewRouter(log, tokenManager, router.RouterDependencies{
 		AuthHandler:     authHandler,
@@ -76,9 +85,9 @@ func main() {
 		OrderHandler:    orderHandler,
 	})
 
-	server := httpserver.New(cfg, log, router)
+	srv := server.New(cfg, log, router)
 
-	if err := server.Run(ctx); err != nil {
+	if err := srv.Run(ctx); err != nil {
 		log.Error("application failed", slog.String("error", err.Error()))
 		os.Exit(1)
 	}

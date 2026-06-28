@@ -1,0 +1,26 @@
+package orders
+
+import (
+	"context"
+
+	"github.com/MSNZT/orderflow/internal/app/cart"
+	"github.com/MSNZT/orderflow/internal/app/inventory"
+	"github.com/google/uuid"
+)
+
+type Repository interface {
+	ListByUserID(ctx context.Context, userID uuid.UUID, offset int, limit int) ([]Order, error)
+	GetDetailsByIDAndUserID(ctx context.Context, userID uuid.UUID, orderID uuid.UUID) (details *OrderDetails, err error)
+	CreateOrder(ctx context.Context, o *Order) error
+	CreateOrderItems(ctx context.Context, orderItems []OrderItem) error
+}
+
+type CartProvider interface {
+	GetSelectedItemsForCheckout(ctx context.Context, userID uuid.UUID, productIDs []uuid.UUID) ([]cart.CheckoutItem, error)
+	DeleteSelectedItems(ctx context.Context, userID uuid.UUID, productIDs []uuid.UUID) error
+}
+
+type InventoryRepository interface {
+	GetByProductIDsForUpdate(ctx context.Context, productIDs []uuid.UUID) ([]inventory.Inventory, error)
+	ReserveQuantity(ctx context.Context, productID uuid.UUID, quantity int) error
+}
