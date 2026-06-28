@@ -131,7 +131,7 @@ func (c *Client) CreatePayment(ctx context.Context, params CreatePaymentParams) 
 	}
 
 	if err := validateCreatePaymentResponse(&payment, paymentReq); err != nil {
-		return nil, fmt.Errorf("%s validate response: %w: %w", op, ErrResultUnknown, err)
+		return nil, fmt.Errorf("%s: validate response: %w: %w", op, ErrResultUnknown, err)
 	}
 
 	return &payment, nil
@@ -141,7 +141,7 @@ func (c Client) buildCreatePaymentRequest(params CreatePaymentParams) *createPay
 	paymentReq := createPaymentRequest{
 		Money: Money{
 			Value:    formatAmount(params.AmountCents),
-			Currency: params.Currency,
+			Currency: strings.TrimSpace(params.Currency),
 		},
 		Capture:     true,
 		Description: params.Description,
@@ -175,10 +175,6 @@ func validateCreatePaymentResponse(p *Payment, req *createPaymentRequest) error 
 		)
 	}
 
-	if p.CreatedAt.IsZero() {
-		return fmt.Errorf("empty payment created_at: %w", ErrInvalidResponse)
-	}
-
 	if p.Money.Currency != req.Money.Currency {
 		return fmt.Errorf(
 			"currency mismatch: expected %s, got %s: %w",
@@ -202,17 +198,22 @@ func validateCreatePaymentResponse(p *Payment, req *createPaymentRequest) error 
 		)
 	}
 
-	if p.Status == string(StatusPending) {
-		if p.Confirmation.Type != req.Confirmation.Type {
+	if p.CreatedAt.IsZero() {
+		return fmt.Errorf("empty payment created_at: %w", ErrInvalidResponse)
+	}
+
+	if p.Status == StatusPending {
+		if p.Confirmation == nil {
 			return fmt.Errorf(
 				"pending payment has no confirmation: %w",
 				ErrInvalidResponse,
 			)
 		}
 
-		if p.Confirmation.Type != "redirect" {
+		if p.Confirmation.Type != req.Confirmation.Type {
 			return fmt.Errorf(
-				"unexpected confirmation type %q: %w",
+				"confirmation type mismatch: expected %s, got %s: %w",
+				req.Confirmation.Type,
 				p.Confirmation.Type,
 				ErrInvalidResponse,
 			)
@@ -229,8 +230,8 @@ func validateCreatePaymentResponse(p *Payment, req *createPaymentRequest) error 
 	return nil
 }
 
-func isKnownPaymentStatus(status string) bool {
-	switch PaymentStatus(status) {
+func isKnownPaymentStatus(status PaymentStatus) bool {
+	switch status {
 	case StatusPending,
 		StatusSucceeded,
 		StatusCanceled,
