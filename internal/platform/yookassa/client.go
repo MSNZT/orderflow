@@ -137,6 +137,72 @@ func (c *Client) CreatePayment(ctx context.Context, params CreatePaymentParams) 
 	return &payment, nil
 }
 
+func (c *Client) GetPaymentByID(ctx context.Context, paymentID string) (*Payment, error) {
+	const op = "yookassa.client.GetPaymentByID"
+
+	paymentID = strings.TrimSpace(paymentID)
+	if paymentID == "" {
+		return nil, fmt.Errorf("%s: invalid payment id: %q: %w", op, paymentID, ErrInvalidArgument)
+	}
+
+	fullURL, err := url.JoinPath(c.apiURL, "payments", url.PathEscape(paymentID))
+	if err != nil {
+		return nil, fmt.Errorf("%s: failed to join url path: %w", op, err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fullURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("%s: create request: %w", op, err)
+	}
+
+	req.Header.Set("Accept", "application/json")
+	req.SetBasicAuth(c.shopID, c.secretKey)
+
+	res, err := c.httpClient.Do(req)
+	if err != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return nil, fmt.Errorf("%s: send request: %w", op, ctxErr)
+		}
+		return nil, fmt.Errorf("%s: %w: %w", op, ErrProviderUnavailable, err)
+	}
+
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusOK {
+		cause := mapStatusCode(res.StatusCode)
+
+		if res.StatusCode >= http.StatusInternalServerError && res.StatusCode <= 599 {
+			cause = ErrProviderUnavailable
+		}
+
+		apiError := APIError{
+			StatusCode: res.StatusCode,
+			Cause:      cause,
+		}
+
+		var errResponse apiErrorResponse
+		if err := json.NewDecoder(res.Body).Decode(&errResponse); err == nil {
+			apiError.ID = errResponse.ID
+			apiError.Code = errResponse.Code
+			apiError.Description = errResponse.Description
+			apiError.Parameter = errResponse.Parameter
+		}
+
+		return nil, fmt.Errorf("%s: %w", op, &apiError)
+	}
+
+	var payment Payment
+	if err := json.NewDecoder(res.Body).Decode(&payment); err != nil {
+		return nil, fmt.Errorf("%s: decode payment response: %w: %w", op, ErrInvalidResponse, err)
+	}
+
+	if err := validateGetPaymentResponse(&payment, paymentID); err != nil {
+		return nil, fmt.Errorf("%s: validate response: %w", op, err)
+	}
+
+	return &payment, nil
+}
+
 func (c Client) buildCreatePaymentRequest(params CreatePaymentParams) *createPaymentRequest {
 	paymentReq := createPaymentRequest{
 		Money: Money{
@@ -158,7 +224,11 @@ func (c Client) buildCreatePaymentRequest(params CreatePaymentParams) *createPay
 	return &paymentReq
 }
 
-func validateCreatePaymentResponse(p *Payment, req *createPaymentRequest) error {
+func validatePayment(p *Payment) error {
+	if p == nil {
+		return fmt.Errorf("nil payment response: %w", ErrInvalidResponse)
+	}
+
 	if strings.TrimSpace(p.ID) == "" {
 		return fmt.Errorf("empty payment id: %w", ErrInvalidResponse)
 	}
@@ -166,6 +236,27 @@ func validateCreatePaymentResponse(p *Payment, req *createPaymentRequest) error 
 	if !isKnownPaymentStatus(p.Status) {
 		return fmt.Errorf("unknown payment status: %q: %w", p.Status, ErrInvalidResponse)
 	}
+
+	if strings.TrimSpace(p.Money.Currency) == "" {
+		return fmt.Errorf("empty payment currency: %s: %w", p.Money.Currency, ErrInvalidResponse)
+	}
+
+	if strings.TrimSpace(p.Money.Value) == "" {
+		return fmt.Errorf("empty payment money value: %s: %w", p.Money.Value, ErrInvalidResponse)
+	}
+
+	if p.CreatedAt.IsZero() {
+		return fmt.Errorf("empty payment created_at: %w", ErrInvalidResponse)
+	}
+
+	return nil
+}
+
+func validateCreatePaymentResponse(p *Payment, req *createPaymentRequest) error {
+	if err := validatePayment(p); err != nil {
+		return err
+	}
+
 	if p.Money.Value != req.Money.Value {
 		return fmt.Errorf(
 			"amount mismatch: expected %s, got %s: %w",
@@ -198,10 +289,6 @@ func validateCreatePaymentResponse(p *Payment, req *createPaymentRequest) error 
 		)
 	}
 
-	if p.CreatedAt.IsZero() {
-		return fmt.Errorf("empty payment created_at: %w", ErrInvalidResponse)
-	}
-
 	if p.Status == StatusPending {
 		if p.Confirmation == nil {
 			return fmt.Errorf(
@@ -225,6 +312,18 @@ func validateCreatePaymentResponse(p *Payment, req *createPaymentRequest) error 
 				ErrInvalidResponse,
 			)
 		}
+	}
+
+	return nil
+}
+
+func validateGetPaymentResponse(p *Payment, paymentID string) error {
+	if err := validatePayment(p); err != nil {
+		return err
+	}
+
+	if p.ID != paymentID {
+		return fmt.Errorf("mismatch payment id: expected %s, got: %s: %w", paymentID, p.ID, ErrInvalidResponse)
 	}
 
 	return nil

@@ -42,7 +42,7 @@ type Money struct {
 	Currency string `json:"currency"`
 }
 
-type Сonfirmation struct {
+type Confirmation struct {
 	Type            string `json:"type"`
 	ConfirmationURL string `json:"confirmation_url"`
 }
@@ -75,7 +75,7 @@ type Payment struct {
 	Status              PaymentStatus        `json:"status"`
 	Paid                bool                 `json:"paid"`
 	Money               Money                `json:"amount"`
-	Confirmation        *Сonfirmation        `json:"confirmation"`
+	Confirmation        *Confirmation        `json:"confirmation"`
 	CreatedAt           time.Time            `json:"created_at"`
 	Description         string               `json:"description"`
 	Metadata            Metadata             `json:"metadata"`
