@@ -4,13 +4,13 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/MSNZT/orderflow/internal/auth"
+	"github.com/MSNZT/orderflow/internal/app/users"
 	"github.com/MSNZT/orderflow/internal/cart"
 	"github.com/MSNZT/orderflow/internal/orders"
 	"github.com/MSNZT/orderflow/internal/products"
+	"github.com/MSNZT/orderflow/internal/transport/http/auth"
 	"github.com/MSNZT/orderflow/internal/transport/http/health"
 	"github.com/MSNZT/orderflow/internal/transport/http/httpmw"
-	"github.com/MSNZT/orderflow/internal/users"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 )

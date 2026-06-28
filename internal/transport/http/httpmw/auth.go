@@ -5,10 +5,10 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/MSNZT/orderflow/internal/app/users"
 	"github.com/MSNZT/orderflow/internal/infrastructure/token"
 	"github.com/MSNZT/orderflow/internal/transport/http/authcontext"
 	"github.com/MSNZT/orderflow/internal/transport/http/response"
-	"github.com/MSNZT/orderflow/internal/users"
 	"github.com/google/uuid"
 )
 

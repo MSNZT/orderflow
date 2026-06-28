@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/MSNZT/orderflow/internal/app/users"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -22,11 +23,11 @@ func TestRepository_CreateAndGetByEmail(t *testing.T) {
 		t.Fatalf("failed to generate uuid: %v", err)
 	}
 
-	user := User{
+	user := users.User{
 		ID:           id,
 		Email:        "test-" + uuid.NewString() + "@mail.com",
 		PasswordHash: "hash",
-		Role:         RoleCustomer,
+		Role:         users.RoleCustomer,
 	}
 
 	if err := repo.Create(ctx, user); err != nil {
@@ -70,11 +71,11 @@ func TestRepository_CreateAndGetByID(t *testing.T) {
 		t.Fatalf("failed to generate uuid: %v", err)
 	}
 
-	user := User{
+	user := users.User{
 		ID:           id,
 		Email:        "test-" + uuid.NewString() + "@mail.com",
 		PasswordHash: "hash",
-		Role:         RoleCustomer,
+		Role:         users.RoleCustomer,
 	}
 
 	if err := repo.Create(ctx, user); err != nil {
@@ -119,7 +120,7 @@ func TestRepository_GetByEmail_NotFound(t *testing.T) {
 		t.Fatalf("expected error, got nil")
 	}
 
-	if !errors.Is(err, ErrUserNotFound) {
+	if !errors.Is(err, users.ErrUserNotFound) {
 		t.Fatalf("expected ErrUserNotFound, got %v", err)
 	}
 }
@@ -139,7 +140,7 @@ func TestRepository_GetByID_NotFound(t *testing.T) {
 		t.Fatalf("expected error, got nil")
 	}
 
-	if !errors.Is(err, ErrUserNotFound) {
+	if !errors.Is(err, users.ErrUserNotFound) {
 		t.Fatalf("expected ErrUserNotFound, got %v", err)
 	}
 }
@@ -156,11 +157,11 @@ func TestRepository_Create_DuplicateEmail(t *testing.T) {
 		t.Fatalf("failed to generate uuid: %v", err)
 	}
 
-	first := User{
+	first := users.User{
 		ID:           id,
 		Email:        email,
 		PasswordHash: "hash",
-		Role:         RoleCustomer,
+		Role:         users.RoleCustomer,
 	}
 
 	id, err = uuid.NewV7()
@@ -168,11 +169,11 @@ func TestRepository_Create_DuplicateEmail(t *testing.T) {
 		t.Fatalf("failed to generate uuid: %v", err)
 	}
 
-	second := User{
+	second := users.User{
 		ID:           id,
 		Email:        email,
 		PasswordHash: "hash",
-		Role:         RoleCustomer,
+		Role:         users.RoleCustomer,
 	}
 
 	if err := repo.Create(ctx, first); err != nil {
@@ -188,7 +189,7 @@ func TestRepository_Create_DuplicateEmail(t *testing.T) {
 		t.Fatalf("expected err, got nil")
 	}
 
-	if !errors.Is(err, ErrEmailAlreadyUsed) {
+	if !errors.Is(err, users.ErrEmailAlreadyUsed) {
 		t.Fatalf("expected ErrEmailAlreadyUsed, got %v", err)
 	}
 }

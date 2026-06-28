@@ -7,20 +7,23 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/MSNZT/orderflow/internal/auth"
+	authapp "github.com/MSNZT/orderflow/internal/app/auth"
+	usersapp "github.com/MSNZT/orderflow/internal/app/users"
 	"github.com/MSNZT/orderflow/internal/cart"
 	"github.com/MSNZT/orderflow/internal/config"
 	"github.com/MSNZT/orderflow/internal/infrastructure/logger"
+	"github.com/MSNZT/orderflow/internal/infrastructure/password"
 	"github.com/MSNZT/orderflow/internal/infrastructure/postgres"
+	"github.com/MSNZT/orderflow/internal/infrastructure/postgres/inventory"
+	"github.com/MSNZT/orderflow/internal/infrastructure/postgres/sessions"
+	usersrepo "github.com/MSNZT/orderflow/internal/infrastructure/postgres/users"
 	"github.com/MSNZT/orderflow/internal/infrastructure/token"
-	"github.com/MSNZT/orderflow/internal/inventory"
 	"github.com/MSNZT/orderflow/internal/orders"
 	"github.com/MSNZT/orderflow/internal/products"
-	"github.com/MSNZT/orderflow/internal/sessions"
+	authhttp "github.com/MSNZT/orderflow/internal/transport/http/auth"
 	"github.com/MSNZT/orderflow/internal/transport/http/health"
 	"github.com/MSNZT/orderflow/internal/transport/http/router"
 	"github.com/MSNZT/orderflow/internal/transport/http/server"
-	"github.com/MSNZT/orderflow/internal/users"
 )
 
 func main() {
@@ -46,14 +49,14 @@ func main() {
 	const cost = 12
 	healthHandler := health.NewHandler(log, dbPool)
 
-	usersRepository := users.NewRepository(dbPool)
-	hasher := users.NewBcryptHasher(cost)
-	usersService := users.NewService(usersRepository, hasher)
+	usersRepository := usersrepo.NewRepository(dbPool)
+	hasher := password.NewBcryptHasher(cost)
+	usersService := usersapp.NewService(usersRepository, hasher)
 	tokenManager := token.NewManager(cfg.JWT.Secret, cfg.JWT.AccessTTL)
 
 	sessionsRepository := sessions.NewRepository(dbPool)
-	authService := auth.NewService(usersService, tokenManager, sessionsRepository, cfg.JWT.RefreshTTL)
-	authHandler := auth.NewHandler(log, usersService, authService)
+	authService := authapp.NewService(usersService, tokenManager, sessionsRepository, cfg.JWT.RefreshTTL)
+	authHandler := authhttp.NewHandler(log, usersService, authService)
 
 	productsRepository := products.NewRepository(dbPool)
 	inventoryRepository := inventory.NewRepository(dbPool)

@@ -5,11 +5,14 @@ import (
 	"errors"
 	"fmt"
 
+	inventoryapp "github.com/MSNZT/orderflow/internal/app/inventory"
 	"github.com/MSNZT/orderflow/internal/infrastructure/postgres"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 )
+
+var _ inventoryapp.Repository = (*Repository)(nil)
 
 type Repository struct {
 	db postgres.DBTX
@@ -34,7 +37,7 @@ func (r *Repository) Create(ctx context.Context, productID uuid.UUID, quantity i
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) {
 			if pgErr.Code == "23505" {
-				return fmt.Errorf("%s: %w", op, ErrInventoryAlreadyExists)
+				return fmt.Errorf("%s: %w", op, inventoryapp.ErrInventoryAlreadyExists)
 			}
 		}
 		return fmt.Errorf("%s: %w", op, err)
@@ -43,7 +46,7 @@ func (r *Repository) Create(ctx context.Context, productID uuid.UUID, quantity i
 	return nil
 }
 
-func (r *Repository) GetByProductID(ctx context.Context, productID uuid.UUID) (*Inventory, error) {
+func (r *Repository) GetByProductID(ctx context.Context, productID uuid.UUID) (*inventoryapp.Inventory, error) {
 	const op = "inventory.repository.GetByProductID"
 
 	query := `
@@ -56,7 +59,7 @@ func (r *Repository) GetByProductID(ctx context.Context, productID uuid.UUID) (*
 		FROM product_inventory
 		WHERE product_id = $1;
 	`
-	var inv Inventory
+	var inv inventoryapp.Inventory
 
 	db := postgres.ExecutorFromContext(ctx, r.db)
 
@@ -65,7 +68,7 @@ func (r *Repository) GetByProductID(ctx context.Context, productID uuid.UUID) (*
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, fmt.Errorf("%s: %w", op, ErrInventoryNotFound)
+			return nil, fmt.Errorf("%s: %w", op, inventoryapp.ErrInventoryNotFound)
 		}
 
 		return nil, fmt.Errorf("%s: %w", op, err)
@@ -74,7 +77,7 @@ func (r *Repository) GetByProductID(ctx context.Context, productID uuid.UUID) (*
 	return &inv, nil
 }
 
-func (r *Repository) GetByProductIDsForUpdate(ctx context.Context, productIDs []uuid.UUID) ([]Inventory, error) {
+func (r *Repository) GetByProductIDsForUpdate(ctx context.Context, productIDs []uuid.UUID) ([]inventoryapp.Inventory, error) {
 	const op = "inventory.repository.GetByProductIDsForUpdate"
 
 	query := `
@@ -99,10 +102,10 @@ func (r *Repository) GetByProductIDsForUpdate(ctx context.Context, productIDs []
 
 	defer rows.Close()
 
-	var inventories = make([]Inventory, 0, len(productIDs))
+	var inventories = make([]inventoryapp.Inventory, 0, len(productIDs))
 
 	for rows.Next() {
-		var inv Inventory
+		var inv inventoryapp.Inventory
 
 		if err := rows.Scan(
 			&inv.ProductID, &inv.Quantity, &inv.ReservedQuantity, &inv.CreatedAt, &inv.UpdatedAt,
@@ -124,7 +127,7 @@ func (r *Repository) ReserveQuantity(ctx context.Context, productID uuid.UUID, q
 	const op = "inventory.repository.ReserveQuantity"
 
 	if quantity <= 0 {
-		return fmt.Errorf("%s: %w", op, ErrInventoryQuantityInvalid)
+		return fmt.Errorf("%s: %w", op, inventoryapp.ErrInventoryQuantityInvalid)
 	}
 
 	query := `
@@ -144,7 +147,7 @@ func (r *Repository) ReserveQuantity(ctx context.Context, productID uuid.UUID, q
 	}
 
 	if res.RowsAffected() == 0 {
-		return fmt.Errorf("%s: %w", op, ErrInsufficientStock)
+		return fmt.Errorf("%s: %w", op, inventoryapp.ErrInsufficientStock)
 	}
 
 	return nil
@@ -154,7 +157,7 @@ func (r *Repository) DecreaseQuantity(ctx context.Context, productID uuid.UUID, 
 	const op = "inventory.repository.DecreaseQuantity"
 
 	if requestedQuantity <= 0 {
-		return fmt.Errorf("%s: %w", op, ErrInventoryQuantityInvalid)
+		return fmt.Errorf("%s: %w", op, inventoryapp.ErrInventoryQuantityInvalid)
 	}
 
 	query := `
@@ -173,7 +176,7 @@ func (r *Repository) DecreaseQuantity(ctx context.Context, productID uuid.UUID, 
 	}
 
 	if res.RowsAffected() == 0 {
-		return fmt.Errorf("%s: %w", op, ErrInsufficientStock)
+		return fmt.Errorf("%s: %w", op, inventoryapp.ErrInsufficientStock)
 	}
 
 	return nil

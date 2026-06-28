@@ -5,14 +5,14 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/MSNZT/orderflow/internal/app/inventory"
 	"github.com/MSNZT/orderflow/internal/infrastructure/postgres"
-	"github.com/MSNZT/orderflow/internal/inventory"
 	"github.com/google/uuid"
 )
 
 type Service struct {
 	productRepo   *Repository
-	inventoryRepo *inventory.Repository
+	inventoryRepo inventory.Repository
 	txManager     *postgres.TxManager
 }
 
@@ -26,7 +26,7 @@ type createInput struct {
 
 func NewService(
 	productRepo *Repository,
-	inventoryRepo *inventory.Repository,
+	inventoryRepo inventory.Repository,
 	txManager *postgres.TxManager,
 ) *Service {
 	return &Service{productRepo: productRepo, inventoryRepo: inventoryRepo, txManager: txManager}

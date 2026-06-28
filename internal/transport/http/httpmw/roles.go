@@ -3,9 +3,9 @@ package httpmw
 import (
 	"net/http"
 
+	"github.com/MSNZT/orderflow/internal/app/users"
 	"github.com/MSNZT/orderflow/internal/transport/http/authcontext"
 	"github.com/MSNZT/orderflow/internal/transport/http/response"
-	"github.com/MSNZT/orderflow/internal/users"
 )
 
 func RequireRole(allowedRoles ...users.Role) func(http.Handler) http.Handler {

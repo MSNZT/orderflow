@@ -7,9 +7,9 @@ import (
 	"net"
 	"time"
 
+	"github.com/MSNZT/orderflow/internal/app/sessions"
+	"github.com/MSNZT/orderflow/internal/app/users"
 	"github.com/MSNZT/orderflow/internal/infrastructure/token"
-	"github.com/MSNZT/orderflow/internal/sessions"
-	"github.com/MSNZT/orderflow/internal/users"
 	"github.com/google/uuid"
 )
 
@@ -21,7 +21,7 @@ type TokenManager interface {
 type Service struct {
 	usersService       *users.Service
 	tokenManager       TokenManager
-	sessionsRepository *sessions.Repository
+	sessionsRepository sessions.Repository
 	refreshTTL         time.Duration
 }
 
@@ -40,7 +40,7 @@ type refreshResult struct {
 	RefreshTokenTTL time.Duration
 }
 
-func NewService(usersService *users.Service, tokenManager TokenManager, sessionsRepository *sessions.Repository, refreshTTL time.Duration) *Service {
+func NewService(usersService *users.Service, tokenManager TokenManager, sessionsRepository sessions.Repository, refreshTTL time.Duration) *Service {
 	return &Service{
 		usersService:       usersService,
 		tokenManager:       tokenManager,

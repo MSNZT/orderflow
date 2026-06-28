@@ -6,10 +6,11 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/MSNZT/orderflow/internal/sessions"
+	"github.com/MSNZT/orderflow/internal/app/auth"
+	"github.com/MSNZT/orderflow/internal/app/sessions"
+	"github.com/MSNZT/orderflow/internal/app/users"
 	"github.com/MSNZT/orderflow/internal/transport/http/authcontext"
 	"github.com/MSNZT/orderflow/internal/transport/http/response"
-	"github.com/MSNZT/orderflow/internal/users"
 )
 
 type registerRequest struct {
@@ -48,10 +49,10 @@ type userResponse struct {
 type Handler struct {
 	log          *slog.Logger
 	usersService *users.Service
-	authService  *Service
+	authService  *auth.Service
 }
 
-func NewHandler(log *slog.Logger, usersService *users.Service, authService *Service) *Handler {
+func NewHandler(log *slog.Logger, usersService *users.Service, authService *auth.Service) *Handler {
 	return &Handler{log: log, usersService: usersService, authService: authService}
 }
 

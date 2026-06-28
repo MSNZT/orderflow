@@ -1,15 +1,15 @@
-package users
+package password
 
-import "golang.org/x/crypto/bcrypt"
-
-type PasswordHasher interface {
-	Hash(password string) (string, error)
-	Compare(hash, password string) error
-}
+import (
+	users "github.com/MSNZT/orderflow/internal/app/users"
+	"golang.org/x/crypto/bcrypt"
+)
 
 type BcryptHasher struct {
 	cost int
 }
+
+var _ users.PasswordHasher = (*BcryptHasher)(nil)
 
 func NewBcryptHasher(cost int) *BcryptHasher {
 	return &BcryptHasher{cost: cost}

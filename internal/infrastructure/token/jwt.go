@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/MSNZT/orderflow/internal/users"
+	"github.com/MSNZT/orderflow/internal/app/users"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 )

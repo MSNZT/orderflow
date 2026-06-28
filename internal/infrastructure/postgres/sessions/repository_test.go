@@ -7,9 +7,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/MSNZT/orderflow/internal/users"
+	"github.com/MSNZT/orderflow/internal/app/users"
+	infrausers "github.com/MSNZT/orderflow/internal/infrastructure/postgres/users"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	sessionsapp "github.com/MSNZT/orderflow/internal/app/sessions"
 )
 
 func TestRepository_Create(t *testing.T) {
@@ -57,7 +60,7 @@ func TestRepository_FindByRefreshTokenHash_NotFound(t *testing.T) {
 	refreshTokenHash := "not_found-token-hash" + newTestUUID(t).String()
 
 	_, err := sessionRepository.FindByRefreshTokenHash(ctx, refreshTokenHash)
-	if !errors.Is(err, ErrSessionNotFound) {
+	if !errors.Is(err, sessionsapp.ErrSessionNotFound) {
 		t.Fatalf("expected ErrSessionNotFound, got: %v", err)
 	}
 }
@@ -109,7 +112,7 @@ func TestRepository_RotateRefreshToken(t *testing.T) {
 	}
 
 	_, err = sessionRepository.FindByRefreshTokenHash(ctx, oldSession.RefreshTokenHash)
-	if !errors.Is(err, ErrSessionNotFound) {
+	if !errors.Is(err, sessionsapp.ErrSessionNotFound) {
 		t.Fatalf("expected ErrSessionNotFound, got: %v", err)
 	}
 }
@@ -125,7 +128,7 @@ func TestRepository_RotateRefreshToken_NotFound(t *testing.T) {
 	expiresAt := time.Now().UTC().Truncate(time.Microsecond).Add(168 * time.Hour)
 
 	err := sessionRepository.RotateRefreshToken(ctx, id, newRefreshTokenHash, expiresAt)
-	if !errors.Is(err, ErrSessionNotFound) {
+	if !errors.Is(err, sessionsapp.ErrSessionNotFound) {
 		t.Fatalf("expected ErrSessionNotFound, got: %v", err)
 	}
 }
@@ -229,7 +232,7 @@ func TestRepository_RevokeRefreshToken_NotFound(t *testing.T) {
 	missingHash := "missing-hash" + newTestUUID(t).String()
 
 	err := sessionRepository.Revoke(ctx, missingHash)
-	if !errors.Is(err, ErrSessionNotFound) {
+	if !errors.Is(err, sessionsapp.ErrSessionNotFound) {
 		t.Fatalf("expected ErrSessionNotFound, got: %v", err)
 	}
 }
@@ -237,7 +240,7 @@ func TestRepository_RevokeRefreshToken_NotFound(t *testing.T) {
 func createTestUser(t *testing.T, ctx context.Context, pool *pgxpool.Pool) *users.User {
 	t.Helper()
 
-	repo := users.NewRepository(pool)
+	repo := infrausers.NewRepository(pool)
 
 	id := newTestUUID(t)
 
@@ -265,14 +268,14 @@ func deleteTestUser(t *testing.T, pool *pgxpool.Pool, ctx context.Context, userI
 	}
 }
 
-func createTestSession(t *testing.T, userId uuid.UUID, ctx context.Context, sessionRepository *Repository) *Session {
+func createTestSession(t *testing.T, userId uuid.UUID, ctx context.Context, sessionRepository *Repository) *sessionsapp.Session {
 	t.Helper()
 
 	id := newTestUUID(t)
 	refreshTokenHash := "refresh-token-hash-" + id.String()
 	expiresAt := time.Now().UTC().Truncate(time.Microsecond).Add(168 * time.Hour)
 
-	session := Session{
+	session := sessionsapp.Session{
 		ID:               id,
 		UserID:           userId,
 		RefreshTokenHash: refreshTokenHash,

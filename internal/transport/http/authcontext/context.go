@@ -3,7 +3,7 @@ package authcontext
 import (
 	"context"
 
-	"github.com/MSNZT/orderflow/internal/users"
+	"github.com/MSNZT/orderflow/internal/app/users"
 	"github.com/google/uuid"
 )
 
