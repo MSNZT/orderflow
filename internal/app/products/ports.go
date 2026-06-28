@@ -15,7 +15,3 @@ type Repository interface {
 type InventoryRepository interface {
 	Create(ctx context.Context, productID uuid.UUID, quantity int32) error
 }
-
-type TxManager interface {
-	WithinTx(ctx context.Context, fn func(ctx context.Context) error) error
-}

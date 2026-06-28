@@ -8,13 +8,14 @@ import (
 	"syscall"
 
 	authapp "github.com/MSNZT/orderflow/internal/app/auth"
+	cartapp "github.com/MSNZT/orderflow/internal/app/cart"
 	productsapp "github.com/MSNZT/orderflow/internal/app/products"
 	usersapp "github.com/MSNZT/orderflow/internal/app/users"
-	"github.com/MSNZT/orderflow/internal/cart"
 	"github.com/MSNZT/orderflow/internal/config"
 	"github.com/MSNZT/orderflow/internal/infrastructure/logger"
 	"github.com/MSNZT/orderflow/internal/infrastructure/password"
 	"github.com/MSNZT/orderflow/internal/infrastructure/postgres"
+	cartinfra "github.com/MSNZT/orderflow/internal/infrastructure/postgres/cart"
 	"github.com/MSNZT/orderflow/internal/infrastructure/postgres/inventory"
 	productsinfra "github.com/MSNZT/orderflow/internal/infrastructure/postgres/products"
 	"github.com/MSNZT/orderflow/internal/infrastructure/postgres/sessions"
@@ -22,6 +23,7 @@ import (
 	"github.com/MSNZT/orderflow/internal/infrastructure/token"
 	"github.com/MSNZT/orderflow/internal/orders"
 	authhttp "github.com/MSNZT/orderflow/internal/transport/http/auth"
+	carthttp "github.com/MSNZT/orderflow/internal/transport/http/cart"
 	"github.com/MSNZT/orderflow/internal/transport/http/health"
 	productshttp "github.com/MSNZT/orderflow/internal/transport/http/products"
 	"github.com/MSNZT/orderflow/internal/transport/http/router"
@@ -65,9 +67,9 @@ func main() {
 	productsService := productsapp.NewService(productsRepository, inventoryRepository, txManager)
 	productsHandler := productshttp.NewHandler(log, productsService)
 
-	cartRepository := cart.NewRepository(dbPool)
-	cartService := cart.NewService(cartRepository, txManager, productsService)
-	cartHandler := cart.NewHandler(log, cartService)
+	cartRepository := cartinfra.NewRepository(dbPool)
+	cartService := cartapp.NewService(cartRepository, txManager, productsService)
+	cartHandler := carthttp.NewHandler(log, cartService)
 
 	orderRepository := orders.NewRepository(dbPool)
 	orderService := orders.NewService(orderRepository, inventoryRepository, cartService, txManager)

@@ -1,6 +1,7 @@
 package cart
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -8,14 +9,25 @@ import (
 	"net/url"
 	"strconv"
 
+	cartapp "github.com/MSNZT/orderflow/internal/app/cart"
 	"github.com/MSNZT/orderflow/internal/transport/http/authcontext"
 	"github.com/MSNZT/orderflow/internal/transport/http/response"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 )
 
+type Service interface {
+	GetItems(ctx context.Context, input cartapp.GetItemsInput) (*cartapp.Cart, error)
+	AddItem(ctx context.Context, input cartapp.AddItemInput) error
+	UpdateItemQuantity(ctx context.Context, input cartapp.UpdateItemQuantityInput) error
+	DeleteItem(ctx context.Context, userID uuid.UUID, productID uuid.UUID) error
+	ClearItems(ctx context.Context, userID uuid.UUID) error
+	GetSelectedItemsForCheckout(ctx context.Context, userID uuid.UUID, productIDs []uuid.UUID) ([]cartapp.CheckoutItem, error)
+	DeleteSelectedItems(ctx context.Context, userID uuid.UUID, productIDs []uuid.UUID) error
+}
+
 type Handler struct {
-	service *Service
+	service Service
 	log     *slog.Logger
 }
 
@@ -47,7 +59,7 @@ const (
 	defaultCartPage  = 1
 )
 
-func NewHandler(log *slog.Logger, service *Service) *Handler {
+func NewHandler(log *slog.Logger, service *cartapp.Service) *Handler {
 	return &Handler{log: log, service: service}
 }
 
@@ -85,7 +97,7 @@ func (h *Handler) GetItems(w http.ResponseWriter, r *http.Request) {
 		limit = maxCartLimit
 	}
 
-	input := getItemsInput{
+	input := cartapp.GetItemsInput{
 		UserID: userID,
 		Page:   page,
 		Limit:  limit,
@@ -94,7 +106,7 @@ func (h *Handler) GetItems(w http.ResponseWriter, r *http.Request) {
 	cart, err := h.service.GetItems(r.Context(), input)
 	if err != nil {
 		switch {
-		case errors.Is(err, ErrUserIDIsNil):
+		case errors.Is(err, cartapp.ErrUserIDIsNil):
 			response.Unauthorized(w)
 			return
 		default:
@@ -134,7 +146,7 @@ func (h *Handler) AddItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	input := addItemInput{
+	input := cartapp.AddItemInput{
 		UserID:    userID,
 		ProductID: req.ProductID,
 		Quantity:  req.Quantity,
@@ -142,17 +154,17 @@ func (h *Handler) AddItem(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.service.AddItem(r.Context(), input); err != nil {
 		switch {
-		case errors.Is(err, ErrUserIDIsNil):
+		case errors.Is(err, cartapp.ErrUserIDIsNil):
 			response.Unauthorized(w)
 			return
-		case errors.Is(err, ErrProductIDIsNil):
-			response.Error(w, http.StatusBadRequest, ErrProductIDIsNil.Error())
+		case errors.Is(err, cartapp.ErrProductIDIsNil):
+			response.Error(w, http.StatusBadRequest, cartapp.ErrProductIDIsNil.Error())
 			return
-		case errors.Is(err, ErrQuantityInvalid):
-			response.Error(w, http.StatusUnprocessableEntity, ErrQuantityInvalid.Error())
+		case errors.Is(err, cartapp.ErrQuantityInvalid):
+			response.Error(w, http.StatusUnprocessableEntity, cartapp.ErrQuantityInvalid.Error())
 			return
-		case errors.Is(err, ErrProductNotAvailable):
-			response.Error(w, http.StatusNotFound, ErrProductNotAvailable.Error())
+		case errors.Is(err, cartapp.ErrProductNotAvailable):
+			response.Error(w, http.StatusNotFound, cartapp.ErrProductNotAvailable.Error())
 			return
 		default:
 			h.log.Error("failed to add item to cart items", slog.String("op", op), slog.String("err", err.Error()))
@@ -186,7 +198,7 @@ func (h *Handler) UpdateItemQuantity(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	input := updateItemQuantityInput{
+	input := cartapp.UpdateItemQuantityInput{
 		UserID:    userID,
 		ProductID: productID,
 		Quantity:  req.Quantity,
@@ -194,17 +206,17 @@ func (h *Handler) UpdateItemQuantity(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.service.UpdateItemQuantity(r.Context(), input); err != nil {
 		switch {
-		case errors.Is(err, ErrUserIDIsNil):
+		case errors.Is(err, cartapp.ErrUserIDIsNil):
 			response.Unauthorized(w)
 			return
-		case errors.Is(err, ErrProductIDIsNil):
+		case errors.Is(err, cartapp.ErrProductIDIsNil):
 			response.BadRequest(w)
 			return
-		case errors.Is(err, ErrQuantityInvalid):
-			response.Error(w, http.StatusUnprocessableEntity, ErrQuantityInvalid.Error())
+		case errors.Is(err, cartapp.ErrQuantityInvalid):
+			response.Error(w, http.StatusUnprocessableEntity, cartapp.ErrQuantityInvalid.Error())
 			return
-		case errors.Is(err, ErrCartItemNotFound):
-			response.Error(w, http.StatusNotFound, ErrCartItemNotFound.Error())
+		case errors.Is(err, cartapp.ErrCartItemNotFound):
+			response.Error(w, http.StatusNotFound, cartapp.ErrCartItemNotFound.Error())
 			return
 		default:
 			h.log.Error("failed to update item quantity", slog.String("op", op), slog.String("err", err.Error()))
@@ -234,10 +246,10 @@ func (h *Handler) DeleteItem(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.service.DeleteItem(r.Context(), userID, productID); err != nil {
 		switch {
-		case errors.Is(err, ErrUserIDIsNil):
+		case errors.Is(err, cartapp.ErrUserIDIsNil):
 			response.Unauthorized(w)
 			return
-		case errors.Is(err, ErrProductIDIsNil):
+		case errors.Is(err, cartapp.ErrProductIDIsNil):
 			response.BadRequest(w)
 			return
 		}
@@ -260,7 +272,7 @@ func (h *Handler) ClearItems(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.service.ClearItems(r.Context(), userID); err != nil {
-		if errors.Is(err, ErrUserIDIsNil) {
+		if errors.Is(err, cartapp.ErrUserIDIsNil) {
 			response.Unauthorized(w)
 			return
 		}
@@ -290,7 +302,7 @@ func parsePagination(urlValues url.Values, key string) (int, bool) {
 	return int(v), true
 }
 
-func toCartItemResponse(item CartItem) cartItemResponse {
+func toCartItemResponse(item cartapp.CartItem) cartItemResponse {
 	return cartItemResponse{
 		ProductID:           item.ProductID,
 		Name:                item.Name,

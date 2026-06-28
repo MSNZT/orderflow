@@ -6,43 +6,39 @@ import (
 	"fmt"
 
 	"github.com/MSNZT/orderflow/internal/app/products"
-	"github.com/MSNZT/orderflow/internal/infrastructure/postgres"
+	"github.com/MSNZT/orderflow/internal/app/transaction"
 	"github.com/google/uuid"
 )
 
-type ProductsProvider interface {
-	GetByID(ctx context.Context, productID uuid.UUID) (*products.Product, error)
-}
-
 type Service struct {
-	repo            *Repository
-	txManager       *postgres.TxManager
+	repo            Repository
+	txManager       transaction.TxManager
 	productsService ProductsProvider
 }
 
-func NewService(repo *Repository, txManager *postgres.TxManager, productService ProductsProvider) *Service {
+func NewService(repo Repository, txManager transaction.TxManager, productService ProductsProvider) *Service {
 	return &Service{repo: repo, txManager: txManager, productsService: productService}
 }
 
-type getItemsInput struct {
+type GetItemsInput struct {
 	UserID uuid.UUID
 	Limit  int
 	Page   int
 }
 
-type addItemInput struct {
+type AddItemInput struct {
 	UserID    uuid.UUID
 	ProductID uuid.UUID
 	Quantity  int32
 }
 
-type updateItemQuantityInput struct {
+type UpdateItemQuantityInput struct {
 	UserID    uuid.UUID
 	ProductID uuid.UUID
 	Quantity  int32
 }
 
-func (s *Service) GetItems(ctx context.Context, input getItemsInput) (*Cart, error) {
+func (s *Service) GetItems(ctx context.Context, input GetItemsInput) (*Cart, error) {
 	const op = "cart.service.GetItems"
 
 	if input.UserID == uuid.Nil {
@@ -60,7 +56,7 @@ func (s *Service) GetItems(ctx context.Context, input getItemsInput) (*Cart, err
 	return cartResponse, nil
 }
 
-func (s *Service) AddItem(ctx context.Context, input addItemInput) error {
+func (s *Service) AddItem(ctx context.Context, input AddItemInput) error {
 	const op = "cart.service.AddItem"
 
 	if input.UserID == uuid.Nil {
@@ -103,7 +99,7 @@ func (s *Service) AddItem(ctx context.Context, input addItemInput) error {
 	return nil
 }
 
-func (s *Service) UpdateItemQuantity(ctx context.Context, input updateItemQuantityInput) error {
+func (s *Service) UpdateItemQuantity(ctx context.Context, input UpdateItemQuantityInput) error {
 	const op = "cart.service.UpdateItemQuantity"
 
 	if input.UserID == uuid.Nil {

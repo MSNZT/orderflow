@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	cartapp "github.com/MSNZT/orderflow/internal/app/cart"
 	"github.com/MSNZT/orderflow/internal/infrastructure/postgres"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -14,11 +15,13 @@ type Repository struct {
 	db postgres.DBTX
 }
 
+var _ cartapp.Repository = (*Repository)(nil)
+
 func NewRepository(db postgres.DBTX) *Repository {
 	return &Repository{db: db}
 }
 
-func (r *Repository) GetItems(ctx context.Context, userId uuid.UUID, limit int, offset int) ([]CartItem, error) {
+func (r *Repository) GetItems(ctx context.Context, userId uuid.UUID, limit int, offset int) ([]cartapp.CartItem, error) {
 	const op = "cart.repository.GetItems"
 
 	query := `
@@ -45,10 +48,10 @@ func (r *Repository) GetItems(ctx context.Context, userId uuid.UUID, limit int, 
 
 	defer rows.Close()
 
-	var cartItems = make([]CartItem, 0, limit)
+	var cartItems = make([]cartapp.CartItem, 0, limit)
 
 	for rows.Next() {
-		var ci CartItem
+		var ci cartapp.CartItem
 
 		if err := rows.Scan(
 			&ci.ProductID, &ci.Name, &ci.Quantity, &ci.PriceCents,
@@ -100,7 +103,7 @@ func (r *Repository) GetByUserID(ctx context.Context, userID uuid.UUID) (uuid.UU
 	var cartID uuid.UUID
 	if err := db.QueryRow(ctx, query, userID).Scan(&cartID); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return uuid.Nil, fmt.Errorf("%s: %w", op, ErrCartNotFound)
+			return uuid.Nil, fmt.Errorf("%s: %w", op, cartapp.ErrCartNotFound)
 		}
 		return uuid.Nil, fmt.Errorf("%s: %w", op, err)
 	}
@@ -156,7 +159,7 @@ func (r *Repository) UpdateItemQuantity(
 	}
 
 	if res.RowsAffected() == 0 {
-		return fmt.Errorf("%s: %w", op, ErrCartItemNotFound)
+		return fmt.Errorf("%s: %w", op, cartapp.ErrCartItemNotFound)
 	}
 
 	return nil
@@ -184,7 +187,7 @@ func (r *Repository) DeleteItem(ctx context.Context, cartID uuid.UUID, productID
 	}
 
 	if res.RowsAffected() == 0 {
-		return fmt.Errorf("%s: %w", op, ErrCartItemNotFound)
+		return fmt.Errorf("%s: %w", op, cartapp.ErrCartItemNotFound)
 	}
 
 	return nil
@@ -217,13 +220,13 @@ func (r *Repository) ClearItems(ctx context.Context, cartID uuid.UUID) error {
 	}
 
 	if res.RowsAffected() == 0 {
-		return fmt.Errorf("%s: %w", op, ErrCartNotFound)
+		return fmt.Errorf("%s: %w", op, cartapp.ErrCartNotFound)
 	}
 
 	return nil
 }
 
-func (r *Repository) GetSelectedItemsForCheckout(ctx context.Context, cartID uuid.UUID, productIDs []uuid.UUID) ([]CheckoutItem, error) {
+func (r *Repository) GetSelectedItemsForCheckout(ctx context.Context, cartID uuid.UUID, productIDs []uuid.UUID) ([]cartapp.CheckoutItem, error) {
 	const op = "cart.repository.GetSelectedItemsForCheckout"
 
 	query := `
@@ -247,10 +250,10 @@ func (r *Repository) GetSelectedItemsForCheckout(ctx context.Context, cartID uui
 
 	defer rows.Close()
 
-	var checkoutItems = make([]CheckoutItem, 0, len(productIDs))
+	var checkoutItems = make([]cartapp.CheckoutItem, 0, len(productIDs))
 
 	for rows.Next() {
-		var item CheckoutItem
+		var item cartapp.CheckoutItem
 
 		if err := rows.Scan(
 			&item.ProductID, &item.ProductName, &item.UnitPriceCents, &item.Currency, &item.Quantity,
@@ -300,7 +303,7 @@ func (r *Repository) DeleteSelectedItems(ctx context.Context, cartID uuid.UUID, 
 	}
 
 	if res.RowsAffected() == 0 {
-		return 0, fmt.Errorf("%s: %w", op, ErrCartNotFound)
+		return 0, fmt.Errorf("%s: %w", op, cartapp.ErrCartNotFound)
 	}
 
 	return resDelete.RowsAffected(), nil

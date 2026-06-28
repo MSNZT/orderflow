@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"slices"
 
+	"github.com/MSNZT/orderflow/internal/app/cart"
 	"github.com/MSNZT/orderflow/internal/app/inventory"
-	"github.com/MSNZT/orderflow/internal/cart"
 	"github.com/MSNZT/orderflow/internal/infrastructure/postgres"
 	"github.com/google/uuid"
 )

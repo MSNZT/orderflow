@@ -5,9 +5,9 @@ import (
 	"net/http"
 
 	"github.com/MSNZT/orderflow/internal/app/users"
-	"github.com/MSNZT/orderflow/internal/cart"
 	"github.com/MSNZT/orderflow/internal/orders"
 	"github.com/MSNZT/orderflow/internal/transport/http/auth"
+	"github.com/MSNZT/orderflow/internal/transport/http/cart"
 	"github.com/MSNZT/orderflow/internal/transport/http/health"
 	"github.com/MSNZT/orderflow/internal/transport/http/httpmw"
 	"github.com/MSNZT/orderflow/internal/transport/http/products"
