@@ -22,8 +22,6 @@ type Service interface {
 	UpdateItemQuantity(ctx context.Context, input cartapp.UpdateItemQuantityInput) error
 	DeleteItem(ctx context.Context, userID uuid.UUID, productID uuid.UUID) error
 	ClearItems(ctx context.Context, userID uuid.UUID) error
-	GetSelectedItemsForCheckout(ctx context.Context, userID uuid.UUID, productIDs []uuid.UUID) ([]cartapp.CheckoutItem, error)
-	DeleteSelectedItems(ctx context.Context, userID uuid.UUID, productIDs []uuid.UUID) error
 }
 
 type Handler struct {
@@ -59,7 +57,7 @@ const (
 	defaultCartPage  = 1
 )
 
-func NewHandler(log *slog.Logger, service *cartapp.Service) *Handler {
+func NewHandler(log *slog.Logger, service Service) *Handler {
 	return &Handler{log: log, service: service}
 }
 

@@ -12,8 +12,6 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
-var _ inventoryapp.Repository = (*Repository)(nil)
-
 type Repository struct {
 	db postgres.DBTX
 }

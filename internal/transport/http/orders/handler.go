@@ -1,6 +1,7 @@
 package orders
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -9,14 +10,21 @@ import (
 	"strconv"
 	"time"
 
+	ordersapp "github.com/MSNZT/orderflow/internal/app/orders"
 	"github.com/MSNZT/orderflow/internal/transport/http/authcontext"
 	"github.com/MSNZT/orderflow/internal/transport/http/response"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 )
 
+type Service interface {
+	ListByUserID(ctx context.Context, userID uuid.UUID, page int, limit int) ([]ordersapp.Order, error)
+	GetByID(ctx context.Context, userID uuid.UUID, orderID uuid.UUID) (*ordersapp.OrderDetails, error)
+	CreateOrder(ctx context.Context, userID uuid.UUID, productIDs []uuid.UUID) (*ordersapp.Order, error)
+}
+
 type Handler struct {
-	service *Service
+	service Service
 	log     *slog.Logger
 }
 
@@ -25,20 +33,20 @@ type createOrderRequest struct {
 }
 
 type orderBaseInfo struct {
-	ID              uuid.UUID `json:"id"`
-	Status          Status    `json:"status"`
-	TotalPriceCents int64     `json:"total_price_cents"`
-	Currency        string    `json:"currency"`
-	CreatedAt       time.Time `json:"created_at"`
-	UpdatedAt       time.Time `json:"updated_at"`
+	ID              uuid.UUID        `json:"id"`
+	Status          ordersapp.Status `json:"status"`
+	TotalPriceCents int64            `json:"total_price_cents"`
+	Currency        string           `json:"currency"`
+	CreatedAt       time.Time        `json:"created_at"`
+	UpdatedAt       time.Time        `json:"updated_at"`
 }
 
 type createOrderResponse struct {
-	ID              uuid.UUID `json:"id"`
-	Status          Status    `json:"status"`
-	TotalPriceCents int64     `json:"total_price_cents"`
-	Currency        string    `json:"currency"`
-	CreatedAt       time.Time `json:"created_at"`
+	ID              uuid.UUID        `json:"id"`
+	Status          ordersapp.Status `json:"status"`
+	TotalPriceCents int64            `json:"total_price_cents"`
+	Currency        string           `json:"currency"`
+	CreatedAt       time.Time        `json:"created_at"`
 }
 
 type getOrdersResponse struct {
@@ -69,7 +77,7 @@ const (
 	defaultOrdersPage  = 1
 )
 
-func NewHandler(log *slog.Logger, service *Service) *Handler {
+func NewHandler(log *slog.Logger, service Service) *Handler {
 	return &Handler{service: service, log: log}
 }
 
@@ -145,7 +153,7 @@ func (h *Handler) ListByUserID(w http.ResponseWriter, r *http.Request) {
 
 	orders, err := h.service.ListByUserID(r.Context(), userID, page, limit)
 	if err != nil {
-		if errors.Is(err, ErrUserIDIsNil) {
+		if errors.Is(err, ordersapp.ErrUserIDIsNil) {
 			response.Unauthorized(w)
 			return
 		}
@@ -184,13 +192,13 @@ func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
 	orderDetails, err := h.service.GetByID(r.Context(), userID, orderID)
 	if err != nil {
 		switch {
-		case errors.Is(err, ErrUserIDIsNil):
+		case errors.Is(err, ordersapp.ErrUserIDIsNil):
 			response.Unauthorized(w)
 			return
-		case errors.Is(err, ErrOrderIDIsNil):
+		case errors.Is(err, ordersapp.ErrOrderIDIsNil):
 			response.BadRequestMsg(w, "invalid order id")
 			return
-		case errors.Is(err, ErrOrderNotFound):
+		case errors.Is(err, ordersapp.ErrOrderNotFound):
 			response.Error(w, http.StatusNotFound, "order not found")
 			return
 		default:
@@ -212,47 +220,47 @@ func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
 
 func writeCreateOrderError(w http.ResponseWriter, err error, log *slog.Logger, op string) {
 	switch {
-	case errors.Is(err, ErrUserIDIsNil):
+	case errors.Is(err, ordersapp.ErrUserIDIsNil):
 		response.Unauthorized(w)
 		return
-	case errors.Is(err, ErrProductIDsEmpty):
+	case errors.Is(err, ordersapp.ErrProductIDsEmpty):
 		response.BadRequestMsg(w, "product_ids must not be empty")
 		return
-	case errors.Is(err, ErrProductIDIsNil):
+	case errors.Is(err, ordersapp.ErrProductIDIsNil):
 		response.BadRequestMsg(w, "product_ids contains an empty UUID")
 		return
-	case errors.Is(err, ErrDuplicateProductID):
+	case errors.Is(err, ordersapp.ErrDuplicateProductID):
 		response.BadRequestMsg(w, "product_ids contains duplicates")
 		return
-	case errors.Is(err, ErrCartChanged):
+	case errors.Is(err, ordersapp.ErrCartChanged):
 		response.Error(
 			w,
 			http.StatusConflict,
 			"cart contents changed, refresh the cart and try again",
 		)
 		return
-	case errors.Is(err, ErrProductInactive):
+	case errors.Is(err, ordersapp.ErrProductInactive):
 		response.Error(
 			w,
 			http.StatusConflict,
 			"one or more selected products are unavailable",
 		)
 		return
-	case errors.Is(err, ErrCurrencyMismatch):
+	case errors.Is(err, ordersapp.ErrCurrencyMismatch):
 		response.Error(
 			w,
 			http.StatusConflict,
 			"selected products have different currencies",
 		)
 		return
-	case errors.Is(err, ErrInsufficientStock):
+	case errors.Is(err, ordersapp.ErrInsufficientStock):
 		response.Error(
 			w,
 			http.StatusConflict,
 			"insufficient stock for one or more selected products",
 		)
 		return
-	case errors.Is(err, ErrInventoryNotFound):
+	case errors.Is(err, ordersapp.ErrInventoryNotFound):
 		log.Error(
 			"inventory not found while creating order",
 			slog.String("op", op),
@@ -285,7 +293,7 @@ func parsePagination(urlValues url.Values, key string) (int, bool) {
 	return int(v), true
 }
 
-func toOrdersResponse(orders []Order, page, limit int) *getOrdersResponse {
+func toOrdersResponse(orders []ordersapp.Order, page, limit int) *getOrdersResponse {
 	resOrders := make([]orderBaseInfo, 0, len(orders))
 	for _, o := range orders {
 		resOrders = append(resOrders, orderBaseInfo{
@@ -305,7 +313,7 @@ func toOrdersResponse(orders []Order, page, limit int) *getOrdersResponse {
 	}
 }
 
-func toOrderResponse(orderDetails *OrderDetails) *orderResponse {
+func toOrderResponse(orderDetails *ordersapp.OrderDetails) *orderResponse {
 	orderItems := make([]orderItemResponse, 0, len(orderDetails.Items))
 	for _, item := range orderDetails.Items {
 		orderItems = append(orderItems, orderItemResponse{

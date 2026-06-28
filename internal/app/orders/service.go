@@ -9,33 +9,28 @@ import (
 
 	"github.com/MSNZT/orderflow/internal/app/cart"
 	"github.com/MSNZT/orderflow/internal/app/inventory"
-	"github.com/MSNZT/orderflow/internal/infrastructure/postgres"
+	"github.com/MSNZT/orderflow/internal/app/transaction"
 	"github.com/google/uuid"
 )
 
-type CartProvider interface {
-	GetSelectedItemsForCheckout(ctx context.Context, userID uuid.UUID, productIDs []uuid.UUID) ([]cart.CheckoutItem, error)
-	DeleteSelectedItems(ctx context.Context, userID uuid.UUID, productIDs []uuid.UUID) error
-}
-
-type InventoryRepository interface {
-	GetByProductIDsForUpdate(ctx context.Context, productIDs []uuid.UUID) ([]inventory.Inventory, error)
-	ReserveQuantity(ctx context.Context, productID uuid.UUID, quantity int) error
-}
-
 type Service struct {
-	repo          *Repository
+	repo          Repository
 	inventoryRepo InventoryRepository
 	cartService   CartProvider
-	txManager     *postgres.TxManager
+	txManager     transaction.Manager
 }
 
 func NewService(
-	repo *Repository,
+	repo Repository,
 	inventoryRepo InventoryRepository,
 	cartService CartProvider,
-	txManager *postgres.TxManager) *Service {
-	return &Service{repo: repo, inventoryRepo: inventoryRepo, cartService: cartService, txManager: txManager}
+	txManager transaction.Manager) *Service {
+	return &Service{
+		repo:          repo,
+		inventoryRepo: inventoryRepo,
+		cartService:   cartService,
+		txManager:     txManager,
+	}
 }
 
 func (s *Service) ListByUserID(ctx context.Context, userID uuid.UUID, page int, limit int) ([]Order, error) {

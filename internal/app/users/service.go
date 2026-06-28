@@ -9,14 +9,8 @@ import (
 	"github.com/google/uuid"
 )
 
-type UserRepository interface {
-	Create(ctx context.Context, user User) error
-	GetByEmail(ctx context.Context, email string) (*User, error)
-	GetByID(ctx context.Context, id uuid.UUID) (*User, error)
-}
-
 type Service struct {
-	repo   UserRepository
+	repo   Repository
 	hasher PasswordHasher
 }
 
@@ -27,7 +21,7 @@ var (
 	ErrUnauthorized       = errors.New("unauthorized")
 )
 
-func NewService(repo UserRepository, hasher PasswordHasher) *Service {
+func NewService(repo Repository, hasher PasswordHasher) *Service {
 	return &Service{
 		repo:   repo,
 		hasher: hasher,

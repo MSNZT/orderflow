@@ -1,12 +1,14 @@
 package auth
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"log/slog"
+	"net"
 	"net/http"
 
-	"github.com/MSNZT/orderflow/internal/app/auth"
+	authapp "github.com/MSNZT/orderflow/internal/app/auth"
 	"github.com/MSNZT/orderflow/internal/app/sessions"
 	"github.com/MSNZT/orderflow/internal/app/users"
 	"github.com/MSNZT/orderflow/internal/transport/http/authcontext"
@@ -46,13 +48,19 @@ type userResponse struct {
 	Role  users.Role `json:"role"`
 }
 
+type Service interface {
+	Login(ctx context.Context, email string, password string, userAgent string, ipAddress *net.IP) (*authapp.LoginResult, error)
+	Refresh(ctx context.Context, refreshToken string) (*authapp.RefreshResult, error)
+	Logout(ctx context.Context, refreshToken string) error
+}
+
 type Handler struct {
 	log          *slog.Logger
 	usersService *users.Service
-	authService  *auth.Service
+	authService  Service
 }
 
-func NewHandler(log *slog.Logger, usersService *users.Service, authService *auth.Service) *Handler {
+func NewHandler(log *slog.Logger, usersService *users.Service, authService Service) *Handler {
 	return &Handler{log: log, usersService: usersService, authService: authService}
 }
 

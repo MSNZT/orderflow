@@ -12,11 +12,11 @@ import (
 
 type Service struct {
 	repo            Repository
-	txManager       transaction.TxManager
+	txManager       transaction.Manager
 	productsService ProductsProvider
 }
 
-func NewService(repo Repository, txManager transaction.TxManager, productService ProductsProvider) *Service {
+func NewService(repo Repository, txManager transaction.Manager, productService ProductsProvider) *Service {
 	return &Service{repo: repo, txManager: txManager, productsService: productService}
 }
 

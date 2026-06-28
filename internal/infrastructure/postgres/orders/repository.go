@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	ordersapp "github.com/MSNZT/orderflow/internal/app/orders"
 	"github.com/MSNZT/orderflow/internal/infrastructure/postgres"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -14,11 +15,13 @@ type Repository struct {
 	db postgres.DBTX
 }
 
+var _ ordersapp.Repository = (*Repository)(nil)
+
 func NewRepository(db postgres.DBTX) *Repository {
 	return &Repository{db: db}
 }
 
-func (r *Repository) ListByUserID(ctx context.Context, userID uuid.UUID, offset int, limit int) ([]Order, error) {
+func (r *Repository) ListByUserID(ctx context.Context, userID uuid.UUID, offset int, limit int) ([]ordersapp.Order, error) {
 	const op = "orders.repository.ListByUserID"
 
 	query := `
@@ -37,7 +40,7 @@ func (r *Repository) ListByUserID(ctx context.Context, userID uuid.UUID, offset 
 		OFFSET $3;
 	`
 
-	orders := make([]Order, 0)
+	orders := make([]ordersapp.Order, 0)
 
 	db := postgres.ExecutorFromContext(ctx, r.db)
 
@@ -48,7 +51,7 @@ func (r *Repository) ListByUserID(ctx context.Context, userID uuid.UUID, offset 
 	defer rows.Close()
 
 	for rows.Next() {
-		var o Order
+		var o ordersapp.Order
 		if err := rows.Scan(
 			&o.ID, &o.UserID, &o.Status, &o.TotalPriceCents, &o.Currency,
 			&o.CreatedAt, &o.UpdatedAt); err != nil {
@@ -66,7 +69,7 @@ func (r *Repository) ListByUserID(ctx context.Context, userID uuid.UUID, offset 
 
 }
 
-func (r *Repository) GetDetailsByIDAndUserID(ctx context.Context, userID uuid.UUID, orderID uuid.UUID) (details *OrderDetails, err error) {
+func (r *Repository) GetDetailsByIDAndUserID(ctx context.Context, userID uuid.UUID, orderID uuid.UUID) (details *ordersapp.OrderDetails, err error) {
 	const op = "orders.repository.GetDetailsByIDAndUserID"
 
 	batch := &pgx.Batch{}
@@ -111,18 +114,18 @@ func (r *Repository) GetDetailsByIDAndUserID(ctx context.Context, userID uuid.UU
 		}
 	}()
 
-	var order Order
+	var order ordersapp.Order
 	err = br.QueryRow().Scan(&order.ID, &order.UserID, &order.Status, &order.TotalPriceCents, &order.Currency,
 		&order.CreatedAt, &order.UpdatedAt,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, fmt.Errorf("%s: %w", op, ErrOrderNotFound)
+			return nil, fmt.Errorf("%s: %w", op, ordersapp.ErrOrderNotFound)
 		}
 		return nil, fmt.Errorf("%s: %w", op, err)
 	}
 
-	orderItems := make([]OrderItem, 0)
+	orderItems := make([]ordersapp.OrderItem, 0)
 
 	rows, err := br.Query()
 	if err != nil {
@@ -131,7 +134,7 @@ func (r *Repository) GetDetailsByIDAndUserID(ctx context.Context, userID uuid.UU
 	defer rows.Close()
 
 	for rows.Next() {
-		var o OrderItem
+		var o ordersapp.OrderItem
 		if err := rows.Scan(
 			&o.ID, &o.OrderID, &o.ProductID, &o.ProductName, &o.UnitPriceCents,
 			&o.Currency, &o.Quantity, &o.LineTotalPriceCents, &o.CreatedAt); err != nil {
@@ -145,7 +148,7 @@ func (r *Repository) GetDetailsByIDAndUserID(ctx context.Context, userID uuid.UU
 		return nil, fmt.Errorf("%s: %w", op, err)
 	}
 
-	details = &OrderDetails{
+	details = &ordersapp.OrderDetails{
 		Order: order,
 		Items: orderItems,
 	}
@@ -154,7 +157,7 @@ func (r *Repository) GetDetailsByIDAndUserID(ctx context.Context, userID uuid.UU
 
 }
 
-func (r *Repository) CreateOrder(ctx context.Context, o *Order) error {
+func (r *Repository) CreateOrder(ctx context.Context, o *ordersapp.Order) error {
 	const op = "orders.repository.CreateOrder"
 
 	query := `
@@ -180,7 +183,7 @@ func (r *Repository) CreateOrder(ctx context.Context, o *Order) error {
 	return nil
 }
 
-func (r *Repository) CreateOrderItems(ctx context.Context, orderItems []OrderItem) error {
+func (r *Repository) CreateOrderItems(ctx context.Context, orderItems []ordersapp.OrderItem) error {
 	const op = "orders.repository.CreateOrderItems"
 
 	if len(orderItems) == 0 {

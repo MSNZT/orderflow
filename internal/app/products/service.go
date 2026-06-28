@@ -12,7 +12,7 @@ import (
 type Service struct {
 	productRepo   Repository
 	inventoryRepo InventoryRepository
-	txManager     transaction.TxManager
+	txManager     transaction.Manager
 }
 
 type CreateInput struct {
@@ -26,7 +26,7 @@ type CreateInput struct {
 func NewService(
 	productRepo Repository,
 	inventoryRepo InventoryRepository,
-	txManager transaction.TxManager,
+	txManager transaction.Manager,
 ) *Service {
 	return &Service{productRepo: productRepo, inventoryRepo: inventoryRepo, txManager: txManager}
 }

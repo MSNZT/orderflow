@@ -9,13 +9,15 @@ import (
 
 	"github.com/MSNZT/orderflow/internal/app/sessions"
 	"github.com/MSNZT/orderflow/internal/app/users"
-	"github.com/MSNZT/orderflow/internal/infrastructure/token"
 	"github.com/google/uuid"
 )
 
 type TokenManager interface {
 	GenerateAccessToken(userID uuid.UUID, role users.Role) (string, error)
 	AccessTTL() time.Duration
+
+	GenerateRefreshToken() (string, error)
+	HashRefreshToken(token string) string
 }
 
 type Service struct {
@@ -25,7 +27,7 @@ type Service struct {
 	refreshTTL         time.Duration
 }
 
-type loginResult struct {
+type LoginResult struct {
 	User            *users.User
 	AccessToken     string
 	RefreshToken    string
@@ -33,7 +35,7 @@ type loginResult struct {
 	RefreshTokenTTL time.Duration
 }
 
-type refreshResult struct {
+type RefreshResult struct {
 	AccessToken     string
 	RefreshToken    string
 	AccessTokenTTL  time.Duration
@@ -49,7 +51,7 @@ func NewService(usersService *users.Service, tokenManager TokenManager, sessions
 	}
 }
 
-func (s *Service) Login(ctx context.Context, email string, password string, userAgent string, ipAddress *net.IP) (*loginResult, error) {
+func (s *Service) Login(ctx context.Context, email string, password string, userAgent string, ipAddress *net.IP) (*LoginResult, error) {
 	const op = "auth.service.Login"
 
 	user, err := s.usersService.Login(ctx, email, password)
@@ -62,12 +64,12 @@ func (s *Service) Login(ctx context.Context, email string, password string, user
 		return nil, fmt.Errorf("%s: %w", op, err)
 	}
 
-	refreshToken, err := token.GenerateRefreshToken()
+	refreshToken, err := s.tokenManager.GenerateRefreshToken()
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", op, err)
 	}
 
-	refreshTokenHash := token.HashRefreshToken(refreshToken)
+	refreshTokenHash := s.tokenManager.HashRefreshToken(refreshToken)
 
 	id, err := uuid.NewV7()
 	if err != nil {
@@ -87,7 +89,7 @@ func (s *Service) Login(ctx context.Context, email string, password string, user
 		return nil, fmt.Errorf("%s: %w", op, err)
 	}
 
-	return &loginResult{
+	return &LoginResult{
 		User:            user,
 		AccessToken:     accessToken,
 		RefreshToken:    refreshToken,
@@ -96,9 +98,9 @@ func (s *Service) Login(ctx context.Context, email string, password string, user
 	}, nil
 }
 
-func (s *Service) Refresh(ctx context.Context, refreshToken string) (*refreshResult, error) {
+func (s *Service) Refresh(ctx context.Context, refreshToken string) (*RefreshResult, error) {
 	const op = "auth.service.Refresh"
-	hashRefreshToken := token.HashRefreshToken(refreshToken)
+	hashRefreshToken := s.tokenManager.HashRefreshToken(refreshToken)
 	session, err := s.sessionsRepository.FindByRefreshTokenHash(ctx, hashRefreshToken)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", op, err)
@@ -124,19 +126,19 @@ func (s *Service) Refresh(ctx context.Context, refreshToken string) (*refreshRes
 		return nil, fmt.Errorf("%s: %w", op, err)
 	}
 
-	newRefreshToken, err := token.GenerateRefreshToken()
+	newRefreshToken, err := s.tokenManager.GenerateRefreshToken()
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", op, err)
 	}
 
-	hashRefreshToken = token.HashRefreshToken(newRefreshToken)
+	hashRefreshToken = s.tokenManager.HashRefreshToken(newRefreshToken)
 
 	err = s.sessionsRepository.RotateRefreshToken(ctx, session.ID, hashRefreshToken, now.Add(s.refreshTTL))
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", op, err)
 	}
 
-	return &refreshResult{
+	return &RefreshResult{
 		AccessToken:     accessToken,
 		RefreshToken:    newRefreshToken,
 		AccessTokenTTL:  s.tokenManager.AccessTTL(),
@@ -146,7 +148,7 @@ func (s *Service) Refresh(ctx context.Context, refreshToken string) (*refreshRes
 
 func (s *Service) Logout(ctx context.Context, refreshToken string) error {
 	const op = "auth.service.Logout"
-	tokenHash := token.HashRefreshToken(refreshToken)
+	tokenHash := s.tokenManager.HashRefreshToken(refreshToken)
 
 	if err := s.sessionsRepository.Revoke(ctx, tokenHash); err != nil {
 		if errors.Is(err, sessions.ErrSessionNotFound) {

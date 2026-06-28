@@ -10,7 +10,7 @@ import (
 
 const refreshTokenSizeBytes = 32
 
-func GenerateRefreshToken() (string, error) {
+func generateRefreshToken() (string, error) {
 	b := make([]byte, refreshTokenSizeBytes)
 	_, err := rand.Read(b)
 
@@ -21,7 +21,7 @@ func GenerateRefreshToken() (string, error) {
 	return base64.RawURLEncoding.EncodeToString(b), nil
 }
 
-func HashRefreshToken(token string) string {
+func hashRefreshToken(token string) string {
 	sum := sha256.Sum256([]byte(token))
 	return hex.EncodeToString(sum[:])
 }

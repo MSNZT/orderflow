@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/MSNZT/orderflow/internal/app/auth"
 	"github.com/MSNZT/orderflow/internal/app/users"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
@@ -14,6 +15,8 @@ type Manager struct {
 	secret    []byte
 	accessTTL time.Duration
 }
+
+var _ auth.TokenManager = (*Manager)(nil)
 
 type Claims struct {
 	Role string `json:"role"`
@@ -79,4 +82,12 @@ func (m *Manager) ParseAccessToken(accessToken string) (*Claims, error) {
 
 func (m *Manager) AccessTTL() time.Duration {
 	return m.accessTTL
+}
+
+func (m *Manager) HashRefreshToken(token string) string {
+	return hashRefreshToken(token)
+}
+
+func (m *Manager) GenerateRefreshToken() (string, error) {
+	return generateRefreshToken()
 }

@@ -50,7 +50,7 @@ type productCreateRequest struct {
 	InitialQuantity int32   `json:"initial_quantity"`
 }
 
-func NewHandler(log *slog.Logger, service *products.Service) *Handler {
+func NewHandler(log *slog.Logger, service Service) *Handler {
 	return &Handler{log: log, service: service}
 }
 
