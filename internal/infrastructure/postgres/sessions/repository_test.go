@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/MSNZT/orderflow/internal/app/users"
-	infrausers "github.com/MSNZT/orderflow/internal/infrastructure/postgres/users"
+	usersrepo "github.com/MSNZT/orderflow/internal/infrastructure/postgres/users"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -240,7 +240,7 @@ func TestRepository_RevokeRefreshToken_NotFound(t *testing.T) {
 func createTestUser(t *testing.T, ctx context.Context, pool *pgxpool.Pool) *users.User {
 	t.Helper()
 
-	repo := infrausers.NewRepository(pool)
+	repo := usersrepo.NewRepository(pool)
 
 	id := newTestUUID(t)
 
