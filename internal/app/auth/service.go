@@ -12,16 +12,8 @@ import (
 	"github.com/google/uuid"
 )
 
-type TokenManager interface {
-	GenerateAccessToken(userID uuid.UUID, role users.Role) (string, error)
-	AccessTTL() time.Duration
-
-	GenerateRefreshToken() (string, error)
-	HashRefreshToken(token string) string
-}
-
 type Service struct {
-	usersService       *users.Service
+	usersService       UsersService
 	tokenManager       TokenManager
 	sessionsRepository sessions.Repository
 	refreshTTL         time.Duration
@@ -42,7 +34,11 @@ type RefreshResult struct {
 	RefreshTokenTTL time.Duration
 }
 
-func NewService(usersService *users.Service, tokenManager TokenManager, sessionsRepository sessions.Repository, refreshTTL time.Duration) *Service {
+func NewService(
+	usersService UsersService,
+	tokenManager TokenManager,
+	sessionsRepository sessions.Repository,
+	refreshTTL time.Duration) *Service {
 	return &Service{
 		usersService:       usersService,
 		tokenManager:       tokenManager,
