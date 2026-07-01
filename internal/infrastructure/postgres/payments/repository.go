@@ -204,7 +204,13 @@ func (r *Repository) ApplyProviderCreateResult(
 		&p.ProviderCreatedAt, &p.SucceededAt, &p.CanceledAt, &p.CreatedAt, &p.UpdatedAt,
 	); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, fmt.Errorf("%s: %w", op, paymentsapp.ErrPaymentNotFound)
+			payment, err := r.resolveApplyResultNoUpdate(ctx, paymentID, result.ProviderPaymentID)
+
+			if err != nil {
+				return nil, fmt.Errorf("%s: %w", op, err)
+			}
+
+			return payment, nil
 		}
 		return nil, fmt.Errorf("%s: %w", op, err)
 	}
@@ -220,21 +226,117 @@ func (r *Repository) MarkFailed(ctx context.Context, paymentID uuid.UUID) error 
 		SET status = 'failed',
 			updated_at = now()
 		WHERE id = $1 AND status = 'creating'
-		RETURNING status;
 	`
 
 	db := postgres.ExecutorFromContext(ctx, r.db)
 
-	var resultStatus string
-	if err := db.QueryRow(ctx, query, paymentID).Scan(&resultStatus); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return fmt.Errorf("%s: %w", op, paymentsapp.ErrPaymentNotFound)
-		}
-		return fmt.Errorf("%s: %w", op, err)
+	res, err := db.Exec(ctx, query, paymentID)
+	if err != nil {
+		return fmt.Errorf("%s: update payment status: %w", op, err)
 	}
 
-	if resultStatus != "failed" {
-		return fmt.Errorf("%s: %w", op, paymentsapp.ErrPaymentStateConflict)
+	if res.RowsAffected() == 1 {
+		return nil
+	}
+
+	return r.resolveMarkFailedNoUpdate(ctx, paymentID)
+}
+
+func (r *Repository) resolveApplyResultNoUpdate(
+	ctx context.Context,
+	paymentID uuid.UUID,
+	providerPaymentID string,
+) (*paymentsapp.Payment, error) {
+	const op = "payments.repository.resolveApplyResultNoUpdate"
+
+	query := `
+		SELECT 
+			id, 
+			order_id, 
+			provider_payment_id, 
+			idempotency_key, 
+			status, 
+			amount_cents,
+			currency, 
+			confirmation_url, 
+			test, 
+			cancellation_party, 
+			cancellation_reason, 
+			provider_created_at, 
+			succeeded_at, 
+			canceled_at,
+			created_at,
+			updated_at
+		FROM payments
+		WHERE id = $1
+	`
+
+	db := postgres.ExecutorFromContext(ctx, r.db)
+	var p paymentsapp.Payment
+	if err := db.QueryRow(ctx, query, paymentID).Scan(
+		&p.ID, &p.OrderID, &p.ProviderPaymentID, &p.IdempotencyKey, &p.Status, &p.AmountCents,
+		&p.Currency, &p.ConfirmationURL, &p.Test, &p.CancellationParty, &p.CancellationReason,
+		&p.ProviderCreatedAt, &p.SucceededAt, &p.CanceledAt, &p.CreatedAt, &p.UpdatedAt,
+	); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, fmt.Errorf("%s: %w", op, paymentsapp.ErrPaymentNotFound)
+		}
+
+		return nil, fmt.Errorf("%s: %w", op, err)
+	}
+
+	if p.ProviderPaymentID == nil {
+		return nil, fmt.Errorf(
+			"%s:[object Object] payment %s has no provider payment ID: %w",
+			op,
+			paymentID,
+			paymentsapp.ErrPaymentStateConflict,
+		)
+	}
+
+	if *p.ProviderPaymentID != providerPaymentID {
+		return nil, fmt.Errorf(
+			"%s: provider payment ID mismatch: expected %q, got %q: %w",
+			op,
+			providerPaymentID,
+			*p.ProviderPaymentID,
+			paymentsapp.ErrPaymentStateConflict,
+		)
+	}
+
+	return &p, nil
+}
+
+func (r *Repository) resolveMarkFailedNoUpdate(
+	ctx context.Context,
+	paymentID uuid.UUID,
+) error {
+	const op = "payments.repository.resolveMarkFailedNoUpdate"
+
+	query := `
+		SELECT status FROM payments
+		WHERE id = $1
+	`
+
+	db := postgres.ExecutorFromContext(ctx, r.db)
+
+	var status paymentsapp.Status
+	if err := db.QueryRow(ctx, query, paymentID).Scan(&status); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return fmt.Errorf("%s: payment: %s: %w", op, paymentID, paymentsapp.ErrPaymentNotFound)
+		}
+
+		return fmt.Errorf("%s: get payment status: %w", op, err)
+	}
+
+	if status != paymentsapp.StatusFailed {
+		return fmt.Errorf(
+			"%s: payment %s has status %q: %w",
+			op,
+			paymentID,
+			status,
+			paymentsapp.ErrPaymentStateConflict,
+		)
 	}
 
 	return nil
