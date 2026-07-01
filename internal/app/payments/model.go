@@ -17,6 +17,23 @@ const (
 	StatusFailed            Status = "failed"
 )
 
+type ProviderCreateResult struct {
+	ProviderPaymentID string
+	Status            Status
+	ConfirmationURL   *string
+	Test              bool
+	ProviderCreatedAt time.Time
+}
+
+type ProviderCreateParams struct {
+	AmountCents    int64
+	Currency       string
+	Description    string
+	OrderID        uuid.UUID
+	LocalPaymentID uuid.UUID
+	IdempotencyKey uuid.UUID
+}
+
 type Payment struct {
 	ID                 uuid.UUID
 	OrderID            uuid.UUID
