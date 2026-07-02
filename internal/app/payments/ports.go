@@ -12,6 +12,7 @@ type Repository interface {
 	ApplyProviderCreateResult(
 		ctx context.Context, paymentID uuid.UUID, result *ProviderCreateResult) (*Payment, error)
 	MarkFailed(ctx context.Context, paymentID uuid.UUID) error
+	GetActiveByOrderID(ctx context.Context, orderID uuid.UUID) (*Payment, error)
 }
 
 type OrdersProvider interface {
