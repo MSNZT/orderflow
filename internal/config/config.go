@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/ilyakaznacheev/cleanenv"
@@ -134,7 +135,31 @@ func (c *Config) validate() error {
 		return fmt.Errorf("orders payment ttl must be greater than 0")
 	}
 
-	if c.Yookassa.RequestTimeout <= 0 {
+	if err := c.Yookassa.validate(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (c YookassaConfig) validate() error {
+	if strings.TrimSpace(c.APIURL) == "" {
+		return fmt.Errorf("yookassa api url is required")
+	}
+
+	if strings.TrimSpace(c.ShopID) == "" {
+		return fmt.Errorf("yookassa shop id is required")
+	}
+
+	if strings.TrimSpace(c.SecretKey) == "" {
+		return fmt.Errorf("yookassa secret key is required")
+	}
+
+	if strings.TrimSpace(c.ReturnURL) == "" {
+		return fmt.Errorf("yookassa return url is required")
+	}
+
+	if c.RequestTimeout <= 0 {
 		return fmt.Errorf("yookassa request timeout must be greater than 0")
 	}
 
