@@ -134,5 +134,9 @@ func (c *Config) validate() error {
 		return fmt.Errorf("orders payment ttl must be greater than 0")
 	}
 
+	if c.Yookassa.RequestTimeout <= 0 {
+		return fmt.Errorf("yookassa request timeout must be greater than 0")
+	}
+
 	return nil
 }

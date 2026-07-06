@@ -34,38 +34,8 @@ func NewClient(cfg YookassaClientConfig) (*Client, error) {
 	secretKey := strings.TrimSpace(cfg.SecretKey)
 	returnURL := strings.TrimSpace(cfg.ReturnURL)
 
-	if cfg.HTTPClient == nil {
-		return nil, fmt.Errorf("yookassa client: nil HTTP client: %w", ErrInvalidArgument)
-	}
-
-	parsedAPIURL, err := url.ParseRequestURI(apiURL)
-	if err != nil {
-		return nil, fmt.Errorf("yookassa client: invalid api URL: %w", ErrInvalidArgument)
-	}
-	if parsedAPIURL.Scheme != "http" && parsedAPIURL.Scheme != "https" {
-		return nil, fmt.Errorf("yookassa client: unsupported api URL scheme: %w", ErrInvalidArgument)
-	}
-	if parsedAPIURL.Host == "" {
-		return nil, fmt.Errorf("yookassa client: empty api URL host: %w", ErrInvalidArgument)
-	}
-
-	if shopID == "" {
-		return nil, fmt.Errorf("yookassa client: empty shop id: %w", ErrInvalidArgument)
-	}
-
-	if secretKey == "" {
-		return nil, fmt.Errorf("yookassa client: empty secret key: %w", ErrInvalidArgument)
-	}
-
-	parsedReturnURL, err := url.ParseRequestURI(returnURL)
-	if err != nil {
-		return nil, fmt.Errorf("yookassa client: invalid return URL: %w", ErrInvalidArgument)
-	}
-	if parsedReturnURL.Scheme != "http" && parsedReturnURL.Scheme != "https" {
-		return nil, fmt.Errorf("yookassa client: unsupported return URL scheme: %w", ErrInvalidArgument)
-	}
-	if parsedReturnURL.Host == "" {
-		return nil, fmt.Errorf("yookassa client: empty return URL host: %w", ErrInvalidArgument)
+	if err := cfg.validate(); err != nil {
+		return nil, err
 	}
 
 	return &Client{
@@ -75,6 +45,51 @@ func NewClient(cfg YookassaClientConfig) (*Client, error) {
 		returnURL:  returnURL,
 		httpClient: cfg.HTTPClient,
 	}, nil
+}
+
+func (c *YookassaClientConfig) validate() error {
+	apiURL := strings.TrimRight(strings.TrimSpace(c.APIURL), "/")
+	shopID := strings.TrimSpace(c.ShopID)
+	secretKey := strings.TrimSpace(c.SecretKey)
+	returnURL := strings.TrimSpace(c.ReturnURL)
+
+	if c.HTTPClient == nil {
+		return fmt.Errorf("yookassa client: nil HTTP client: %w", ErrInvalidArgument)
+	}
+
+	parsedAPIURL, err := url.ParseRequestURI(apiURL)
+	if err != nil {
+		return fmt.Errorf("yookassa client: invalid api URL: %w", ErrInvalidArgument)
+	}
+	if parsedAPIURL.Scheme != "http" && parsedAPIURL.Scheme != "https" {
+		return fmt.Errorf("yookassa client: unsupported api URL scheme: %w", ErrInvalidArgument)
+	}
+	if parsedAPIURL.Host == "" {
+		return fmt.Errorf("yookassa client: empty api URL host: %w", ErrInvalidArgument)
+	}
+
+	if shopID == "" {
+		return fmt.Errorf("yookassa client: empty shop id: %w", ErrInvalidArgument)
+	}
+
+	if secretKey == "" {
+		return fmt.Errorf("yookassa client: empty secret key: %w", ErrInvalidArgument)
+	}
+
+	parsedReturnURL, err := url.ParseRequestURI(returnURL)
+	if err != nil {
+		return fmt.Errorf("yookassa client: invalid return URL: %w", ErrInvalidArgument)
+	}
+
+	if parsedReturnURL.Scheme != "http" && parsedReturnURL.Scheme != "https" {
+		return fmt.Errorf("yookassa client: unsupported return URL scheme: %w", ErrInvalidArgument)
+	}
+
+	if parsedReturnURL.Host == "" {
+		return fmt.Errorf("yookassa client: empty return URL host: %w", ErrInvalidArgument)
+	}
+
+	return nil
 }
 
 func (c *Client) CreatePayment(ctx context.Context, params CreatePaymentParams) (*Payment, error) {

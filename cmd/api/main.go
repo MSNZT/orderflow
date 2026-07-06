@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"log/slog"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -10,6 +11,7 @@ import (
 	authapp "github.com/MSNZT/orderflow/internal/app/auth"
 	cartapp "github.com/MSNZT/orderflow/internal/app/cart"
 	ordersapp "github.com/MSNZT/orderflow/internal/app/orders"
+	paymentsapp "github.com/MSNZT/orderflow/internal/app/payments"
 	productsapp "github.com/MSNZT/orderflow/internal/app/products"
 	usersapp "github.com/MSNZT/orderflow/internal/app/users"
 	"github.com/MSNZT/orderflow/internal/config"
@@ -19,14 +21,17 @@ import (
 	cartrepo "github.com/MSNZT/orderflow/internal/infrastructure/postgres/cart"
 	"github.com/MSNZT/orderflow/internal/infrastructure/postgres/inventory"
 	ordersrepo "github.com/MSNZT/orderflow/internal/infrastructure/postgres/orders"
+	paymentsrepo "github.com/MSNZT/orderflow/internal/infrastructure/postgres/payments"
 	productsrepo "github.com/MSNZT/orderflow/internal/infrastructure/postgres/products"
 	"github.com/MSNZT/orderflow/internal/infrastructure/postgres/sessions"
 	usersrepo "github.com/MSNZT/orderflow/internal/infrastructure/postgres/users"
 	"github.com/MSNZT/orderflow/internal/infrastructure/token"
+	"github.com/MSNZT/orderflow/internal/platform/yookassa"
 	authhttp "github.com/MSNZT/orderflow/internal/transport/http/auth"
 	carthttp "github.com/MSNZT/orderflow/internal/transport/http/cart"
 	"github.com/MSNZT/orderflow/internal/transport/http/health"
 	ordershttp "github.com/MSNZT/orderflow/internal/transport/http/orders"
+	paymentshttp "github.com/MSNZT/orderflow/internal/transport/http/payments"
 	productshttp "github.com/MSNZT/orderflow/internal/transport/http/products"
 	"github.com/MSNZT/orderflow/internal/transport/http/router"
 	"github.com/MSNZT/orderflow/internal/transport/http/server"
@@ -60,6 +65,23 @@ func main() {
 	usersService := usersapp.NewService(usersRepository, hasher)
 	tokenManager := token.NewManager(cfg.JWT.Secret, cfg.JWT.AccessTTL)
 
+	yookassaClient, err := yookassa.NewClient(yookassa.YookassaClientConfig{
+		APIURL:    cfg.Yookassa.APIURL,
+		ShopID:    cfg.Yookassa.ShopID,
+		SecretKey: cfg.Yookassa.SecretKey,
+		ReturnURL: cfg.Yookassa.ReturnURL,
+		HTTPClient: &http.Client{
+			Timeout: cfg.Yookassa.RequestTimeout,
+		},
+	})
+	if err != nil {
+		log.Error(
+			"failed to create yookassa client",
+			slog.String("error", err.Error()),
+		)
+		os.Exit(1)
+	}
+
 	sessionsRepository := sessions.NewRepository(dbPool)
 	authService := authapp.NewService(usersService, tokenManager, sessionsRepository, cfg.JWT.RefreshTTL)
 	authHandler := authhttp.NewHandler(log, usersService, authService)
@@ -77,12 +99,18 @@ func main() {
 	orderService := ordersapp.NewService(orderRepository, inventoryRepository, cartService, txManager, cfg.Orders.PaymentTTL)
 	orderHandler := ordershttp.NewHandler(log, orderService)
 
+	paymentRepository := paymentsrepo.NewRepository(dbPool)
+	paymentProvider := yookassa.NewProvider(yookassaClient)
+	paymentService := paymentsapp.NewService(paymentRepository, orderRepository, paymentProvider)
+	paymentHandler := paymentshttp.NewHandler(log, paymentService)
+
 	router := router.NewRouter(log, tokenManager, router.RouterDependencies{
 		AuthHandler:     authHandler,
 		ProductsHandler: productsHandler,
 		CartHandler:     cartHandler,
 		HealthHandler:   healthHandler,
 		OrderHandler:    orderHandler,
+		PaymentHandler:  paymentHandler,
 	})
 
 	srv := server.New(cfg, log, router)
