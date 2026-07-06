@@ -44,6 +44,10 @@ func (s *Service) CreatePayment(ctx context.Context, userID uuid.UUID, orderID u
 		)
 	}
 
+	if err := s.validatePayableOrder(details); err != nil {
+		return nil, err
+	}
+
 	activePayment, err := s.repo.GetActiveByOrderID(ctx, orderID)
 	if err == nil {
 		return s.processActivePayment(ctx, activePayment)
@@ -51,10 +55,6 @@ func (s *Service) CreatePayment(ctx context.Context, userID uuid.UUID, orderID u
 
 	if !errors.Is(err, ErrPaymentNotFound) {
 		return nil, fmt.Errorf("%s: get active payment: %w", op, err)
-	}
-
-	if err := s.validateNewPaymentOrder(details); err != nil {
-		return nil, err
 	}
 
 	payment, err := s.createLocalPayment(ctx, details)
@@ -149,8 +149,8 @@ func (s *Service) processActivePayment(
 	return updatedPayment, nil
 }
 
-func (s *Service) validateNewPaymentOrder(details *orders.OrderDetails) error {
-	const op = "payments.service.validateNewPaymentOrder"
+func (s *Service) validatePayableOrder(details *orders.OrderDetails) error {
+	const op = "payments.service.validatePayableOrder"
 
 	if details.Status != orders.StatusPending {
 		return fmt.Errorf("%s: %w", op, ErrOrderNotPayable)

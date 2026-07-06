@@ -287,7 +287,7 @@ func (r *Repository) resolveApplyResultNoUpdate(
 
 	if p.ProviderPaymentID == nil {
 		return nil, fmt.Errorf(
-			"%s:[object Object] payment %s has no provider payment ID: %w",
+			"%s: %s has no provider payment ID: %w",
 			op,
 			paymentID,
 			paymentsapp.ErrPaymentStateConflict,
