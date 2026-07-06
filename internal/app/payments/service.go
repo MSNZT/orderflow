@@ -37,6 +37,13 @@ func (s *Service) CreatePayment(ctx context.Context, userID uuid.UUID, orderID u
 		return nil, fmt.Errorf("%s: %w", op, err)
 	}
 
+	if details == nil {
+		return nil, fmt.Errorf(
+			"%s: orders provider returned nil details",
+			op,
+		)
+	}
+
 	activePayment, err := s.repo.GetActiveByOrderID(ctx, orderID)
 	if err == nil {
 		return s.processActivePayment(ctx, activePayment)
@@ -46,55 +53,13 @@ func (s *Service) CreatePayment(ctx context.Context, userID uuid.UUID, orderID u
 		return nil, fmt.Errorf("%s: get active payment: %w", op, err)
 	}
 
-	if details.Status != orders.StatusPending {
-		return nil, fmt.Errorf("%s: %w", op, ErrOrderNotPayable)
+	if err := s.validateNewPaymentOrder(details); err != nil {
+		return nil, err
 	}
 
-	if !details.ExpiresAt.After(time.Now()) {
-		return nil, fmt.Errorf("%s: %w", op, ErrOrderExpired)
-	}
-
-	if details.TotalPriceCents <= 0 {
-		return nil, fmt.Errorf("%s: order has invalid amount: %d", op, details.TotalPriceCents)
-	}
-
-	currency := strings.TrimSpace(details.Currency)
-	if currency == "" {
-		return nil, fmt.Errorf("%s: order has empty currency: %q", op, details.Currency)
-	}
-
-	paymentID, err := uuid.NewV7()
+	payment, err := s.createLocalPayment(ctx, details)
 	if err != nil {
-		return nil, fmt.Errorf("%s: generate payment ID: %w", op, err)
-	}
-
-	newPayment := Payment{
-		ID:             paymentID,
-		OrderID:        orderID,
-		IdempotencyKey: uuid.New(),
-		Status:         StatusCreating,
-		AmountCents:    details.TotalPriceCents,
-		Currency:       currency,
-	}
-
-	payment, err := s.repo.Create(ctx, newPayment)
-	if err != nil {
-		if !errors.Is(err, ErrActivePaymentAlreadyExists) {
-			return nil, fmt.Errorf(
-				"%s: create local payment: %w",
-				op,
-				err,
-			)
-		}
-
-		payment, err = s.repo.GetActiveByOrderID(ctx, orderID)
-		if err != nil {
-			return nil, fmt.Errorf(
-				"%s: get concurrently created payment: %w",
-				op,
-				err,
-			)
-		}
+		return nil, err
 	}
 
 	return s.processActivePayment(ctx, payment)
@@ -110,11 +75,11 @@ func (s *Service) processActivePayment(
 		return nil, fmt.Errorf("%s: nil payment", op)
 	}
 
-	switch payment.Status {
-	case StatusPending, StatusWaitingForCapture:
+	if payment.Status == StatusPending || payment.Status == StatusWaitingForCapture {
 		return payment, nil
-	case StatusCreating:
-	default:
+	}
+
+	if payment.Status != StatusCreating {
 		return nil, fmt.Errorf(
 			"%s: payment %s has unexpected status %q: %w",
 			op,
@@ -182,4 +147,67 @@ func (s *Service) processActivePayment(
 	}
 
 	return updatedPayment, nil
+}
+
+func (s *Service) validateNewPaymentOrder(details *orders.OrderDetails) error {
+	const op = "payments.service.validateNewPaymentOrder"
+
+	if details.Status != orders.StatusPending {
+		return fmt.Errorf("%s: %w", op, ErrOrderNotPayable)
+	}
+
+	if !details.ExpiresAt.After(time.Now()) {
+		return fmt.Errorf("%s: %w", op, ErrOrderExpired)
+	}
+
+	if details.TotalPriceCents <= 0 {
+		return fmt.Errorf("%s: order has invalid amount: %d", op, details.TotalPriceCents)
+	}
+
+	currency := strings.TrimSpace(details.Currency)
+	if currency == "" {
+		return fmt.Errorf("%s: order has empty currency: %q", op, details.Currency)
+	}
+
+	return nil
+}
+
+func (s *Service) createLocalPayment(ctx context.Context, details *orders.OrderDetails) (*Payment, error) {
+	const op = "payments.service.createLocalPayment"
+
+	paymentID, err := uuid.NewV7()
+	if err != nil {
+		return nil, fmt.Errorf("%s: generate payment ID: %w", op, err)
+	}
+
+	newPayment := Payment{
+		ID:             paymentID,
+		OrderID:        details.ID,
+		IdempotencyKey: uuid.New(),
+		Status:         StatusCreating,
+		AmountCents:    details.TotalPriceCents,
+		Currency:       strings.TrimSpace(details.Currency),
+	}
+
+	payment, err := s.repo.Create(ctx, newPayment)
+	if err != nil {
+		if !errors.Is(err, ErrActivePaymentAlreadyExists) {
+			return nil, fmt.Errorf(
+				"%s: create local payment: %w",
+				op,
+				err,
+			)
+		}
+
+		payment, err = s.repo.GetActiveByOrderID(ctx, details.ID)
+		if err != nil {
+			return nil, fmt.Errorf(
+				"%s: get concurrently created payment: %w",
+				op,
+				err,
+			)
+		}
+	}
+
+	return payment, nil
 }
