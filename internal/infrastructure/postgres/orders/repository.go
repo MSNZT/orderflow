@@ -224,3 +224,73 @@ func (r *Repository) CreateOrderItems(ctx context.Context, orderItems []ordersap
 
 	return nil
 }
+
+func (r *Repository) MarkPaid(ctx context.Context, orderID uuid.UUID) error {
+	const op = "orders.repository.MarkPaid"
+
+	if err := r.markFromPending(ctx, orderID, ordersapp.StatusPaid, op); err != nil {
+		return fmt.Errorf("%s: %w", op, err)
+	}
+
+	return nil
+}
+
+func (r *Repository) MarkCanceled(ctx context.Context, orderID uuid.UUID) error {
+	const op = "orders.repository.MarkCanceled"
+
+	if err := r.markFromPending(ctx, orderID, ordersapp.StatusCanceled, op); err != nil {
+		return fmt.Errorf("%s: %w", op, err)
+	}
+
+	return nil
+}
+
+func (r *Repository) MarkExpired(ctx context.Context, orderID uuid.UUID) error {
+	const op = "orders.repository.MarkExpired"
+
+	if err := r.markFromPending(ctx, orderID, ordersapp.StatusExpired, op); err != nil {
+		return fmt.Errorf("%s: %w", op, err)
+	}
+
+	return nil
+}
+
+func (r *Repository) markFromPending(ctx context.Context, orderID uuid.UUID, status ordersapp.Status, op string) error {
+
+	if orderID == uuid.Nil {
+		return fmt.Errorf("%s: %w", op, ordersapp.ErrOrderIDIsNil)
+	}
+
+	query := `
+		WITH existing AS (
+			SELECT id FROM orders WHERE id = $1
+		),
+		updated AS ( 
+			UPDATE orders
+			SET status = $2,
+				updated_at = now()
+			WHERE id = $1 AND status = 'pending'
+			RETURNING id
+		)
+		SELECT
+			EXISTS (SELECT 1 FROM existing) AS order_existing, 
+			EXISTS (SELECT 1 FROM updated) AS order_updated
+	`
+
+	db := postgres.ExecutorFromContext(ctx, r.db)
+
+	var orderExisting, orderUpdated bool
+	if err := db.QueryRow(ctx, query, orderID, status).Scan(&orderExisting, &orderUpdated); err != nil {
+		return fmt.Errorf("%s: failed to query row order update", op)
+	}
+
+	if !orderExisting {
+		return fmt.Errorf("%s: %w", op, ordersapp.ErrOrderNotFound)
+	}
+
+	if !orderUpdated {
+		return fmt.Errorf("%s: %w", op, ordersapp.ErrOrderStatusTransitionInvalid)
+	}
+
+	return nil
+}

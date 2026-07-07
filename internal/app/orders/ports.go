@@ -13,6 +13,9 @@ type Repository interface {
 	GetDetailsByIDAndUserID(ctx context.Context, userID uuid.UUID, orderID uuid.UUID) (details *OrderDetails, err error)
 	CreateOrder(ctx context.Context, o *Order) error
 	CreateOrderItems(ctx context.Context, orderItems []OrderItem) error
+	MarkPaid(ctx context.Context, orderID uuid.UUID) error
+	MarkCanceled(ctx context.Context, orderID uuid.UUID) error
+	MarkExpired(ctx context.Context, orderID uuid.UUID) error
 }
 
 type CartProvider interface {
