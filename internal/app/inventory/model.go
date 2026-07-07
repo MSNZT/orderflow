@@ -18,3 +18,8 @@ type StockDecrease struct {
 	ProductID uuid.UUID
 	Quantity  int32
 }
+
+type ReservedItem struct {
+	ProductID uuid.UUID `json:"product_id"`
+	Quantity  int32     `json:"quantity"`
+}
