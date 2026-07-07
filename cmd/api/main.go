@@ -96,12 +96,16 @@ func main() {
 	cartHandler := carthttp.NewHandler(log, cartService)
 
 	orderRepository := ordersrepo.NewRepository(dbPool)
-	orderService := ordersapp.NewService(orderRepository, inventoryRepository, cartService, txManager, cfg.Orders.PaymentTTL)
+	orderService := ordersapp.NewService(
+		orderRepository, inventoryRepository, cartService, txManager, cfg.Orders.PaymentTTL,
+	)
 	orderHandler := ordershttp.NewHandler(log, orderService)
 
 	paymentRepository := paymentsrepo.NewRepository(dbPool)
 	paymentProvider := yookassa.NewProvider(yookassaClient)
-	paymentService := paymentsapp.NewService(paymentRepository, orderRepository, paymentProvider)
+	paymentService := paymentsapp.NewService(
+		paymentRepository, orderRepository, paymentProvider, inventoryRepository, txManager,
+	)
 	paymentHandler := paymentshttp.NewHandler(log, paymentService)
 
 	router := router.NewRouter(log, tokenManager, router.RouterDependencies{

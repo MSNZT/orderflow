@@ -221,25 +221,155 @@ func (r *Repository) ApplyProviderCreateResult(
 func (r *Repository) MarkFailed(ctx context.Context, paymentID uuid.UUID) error {
 	const op = "payments.repository.MarkFailed"
 
+	if paymentID == uuid.Nil {
+		return fmt.Errorf("%s: %w", op, paymentsapp.ErrPaymentIDIsNil)
+	}
+
 	query := `
-		UPDATE payments
-		SET status = 'failed',
-			updated_at = now()
-		WHERE id = $1 AND status = 'creating'
+		WITH existing AS (
+			SELECT id
+			FROM payments
+			WHERE id = $1
+		),
+		updated AS (
+			UPDATE payments
+			SET status = $2,
+				updated_at = now()
+			WHERE id = $1
+			  AND status = $3
+			RETURNING id
+		)
+		SELECT
+			EXISTS (SELECT 1 FROM existing) AS payment_existing,
+			EXISTS (SELECT 1 FROM updated) AS payment_updated
 	`
 
 	db := postgres.ExecutorFromContext(ctx, r.db)
 
-	res, err := db.Exec(ctx, query, paymentID)
-	if err != nil {
-		return fmt.Errorf("%s: update payment status: %w", op, err)
+	var paymentExisting, paymentUpdated bool
+	if err := db.QueryRow(
+		ctx,
+		query,
+		paymentID,
+		string(paymentsapp.StatusFailed),
+		string(paymentsapp.StatusCreating),
+	).Scan(&paymentExisting, &paymentUpdated); err != nil {
+		return fmt.Errorf("%s: failed to mark payment failed: %w", op, err)
 	}
 
-	if res.RowsAffected() == 1 {
-		return nil
+	if !paymentExisting {
+		return fmt.Errorf("%s: %w", op, paymentsapp.ErrPaymentNotFound)
 	}
 
-	return r.resolveMarkFailedNoUpdate(ctx, paymentID)
+	if !paymentUpdated {
+		return fmt.Errorf("%s: %w", op, paymentsapp.ErrPaymentStatusTransitionInvalid)
+	}
+
+	return nil
+}
+
+func (r *Repository) MarkSucceeded(ctx context.Context, paymentID uuid.UUID) error {
+	const op = "payments.repository.MarkSucceeded"
+
+	if paymentID == uuid.Nil {
+		return fmt.Errorf("%s: %w", op, paymentsapp.ErrPaymentIDIsNil)
+	}
+
+	query := `
+		WITH existing AS (
+			SELECT id
+			FROM payments
+			WHERE id = $1
+		),
+		updated AS (
+			UPDATE payments
+			SET status = $2,
+				succeeded_at = now(),
+				updated_at = now()
+			WHERE id = $1
+			  AND status IN ($3, $4)
+			RETURNING id
+		)
+		SELECT
+			EXISTS (SELECT 1 FROM existing) AS payment_existing,
+			EXISTS (SELECT 1 FROM updated) AS payment_updated
+	`
+
+	db := postgres.ExecutorFromContext(ctx, r.db)
+
+	var paymentExisting, paymentUpdated bool
+	if err := db.QueryRow(
+		ctx,
+		query,
+		paymentID,
+		string(paymentsapp.StatusSucceeded),
+		string(paymentsapp.StatusPending),
+		string(paymentsapp.StatusWaitingForCapture),
+	).Scan(&paymentExisting, &paymentUpdated); err != nil {
+		return fmt.Errorf("%s: failed to mark payment succeeded: %w", op, err)
+	}
+
+	if !paymentExisting {
+		return fmt.Errorf("%s: %w", op, paymentsapp.ErrPaymentNotFound)
+	}
+
+	if !paymentUpdated {
+		return fmt.Errorf("%s: %w", op, paymentsapp.ErrPaymentStatusTransitionInvalid)
+	}
+
+	return nil
+}
+
+func (r *Repository) MarkCanceled(ctx context.Context, paymentID uuid.UUID) error {
+	const op = "payments.repository.MarkCanceled"
+
+	if paymentID == uuid.Nil {
+		return fmt.Errorf("%s: %w", op, paymentsapp.ErrPaymentIDIsNil)
+	}
+
+	query := `
+		WITH existing AS (
+			SELECT id
+			FROM payments
+			WHERE id = $1
+		),
+		updated AS (
+			UPDATE payments
+			SET status = $2,
+				canceled_at = now(),
+				updated_at = now()
+			WHERE id = $1
+			  AND status IN ($3, $4)
+			RETURNING id
+		)
+		SELECT
+			EXISTS (SELECT 1 FROM existing) AS payment_existing,
+			EXISTS (SELECT 1 FROM updated) AS payment_updated
+	`
+
+	db := postgres.ExecutorFromContext(ctx, r.db)
+
+	var paymentExisting, paymentUpdated bool
+	if err := db.QueryRow(
+		ctx,
+		query,
+		paymentID,
+		string(paymentsapp.StatusCanceled),
+		string(paymentsapp.StatusPending),
+		string(paymentsapp.StatusWaitingForCapture),
+	).Scan(&paymentExisting, &paymentUpdated); err != nil {
+		return fmt.Errorf("%s: failed to mark payment canceled: %w", op, err)
+	}
+
+	if !paymentExisting {
+		return fmt.Errorf("%s: %w", op, paymentsapp.ErrPaymentNotFound)
+	}
+
+	if !paymentUpdated {
+		return fmt.Errorf("%s: %w", op, paymentsapp.ErrPaymentStatusTransitionInvalid)
+	}
+
+	return nil
 }
 
 func (r *Repository) resolveApplyResultNoUpdate(
@@ -305,39 +435,4 @@ func (r *Repository) resolveApplyResultNoUpdate(
 	}
 
 	return &p, nil
-}
-
-func (r *Repository) resolveMarkFailedNoUpdate(
-	ctx context.Context,
-	paymentID uuid.UUID,
-) error {
-	const op = "payments.repository.resolveMarkFailedNoUpdate"
-
-	query := `
-		SELECT status FROM payments
-		WHERE id = $1
-	`
-
-	db := postgres.ExecutorFromContext(ctx, r.db)
-
-	var status paymentsapp.Status
-	if err := db.QueryRow(ctx, query, paymentID).Scan(&status); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return fmt.Errorf("%s: payment: %s: %w", op, paymentID, paymentsapp.ErrPaymentNotFound)
-		}
-
-		return fmt.Errorf("%s: get payment status: %w", op, err)
-	}
-
-	if status != paymentsapp.StatusFailed {
-		return fmt.Errorf(
-			"%s: payment %s has status %q: %w",
-			op,
-			paymentID,
-			status,
-			paymentsapp.ErrPaymentStateConflict,
-		)
-	}
-
-	return nil
 }

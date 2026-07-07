@@ -7,18 +7,28 @@ import (
 	"strings"
 	"time"
 
+	"github.com/MSNZT/orderflow/internal/app/inventory"
 	"github.com/MSNZT/orderflow/internal/app/orders"
+	"github.com/MSNZT/orderflow/internal/app/transaction"
 	"github.com/google/uuid"
 )
 
 type Service struct {
-	repo            Repository
-	ordersProvider  OrdersProvider
-	paymentProvider PaymentProvider
+	repo              Repository
+	ordersProvider    OrdersProvider
+	paymentProvider   PaymentProvider
+	inventoryProvider InventoryProvider
+	txManager         transaction.Manager
 }
 
-func NewService(repo Repository, ordersProvider OrdersProvider, paymentProvider PaymentProvider) *Service {
-	return &Service{repo: repo, ordersProvider: ordersProvider, paymentProvider: paymentProvider}
+func NewService(
+	repo Repository, ordersProvider OrdersProvider, paymentProvider PaymentProvider,
+	inventoryProvider InventoryProvider, txManager transaction.Manager,
+) *Service {
+	return &Service{
+		repo: repo, ordersProvider: ordersProvider, paymentProvider: paymentProvider,
+		inventoryProvider: inventoryProvider, txManager: txManager,
+	}
 }
 
 func (s *Service) CreatePayment(ctx context.Context, userID uuid.UUID, orderID uuid.UUID) (*Payment, error) {
@@ -63,6 +73,120 @@ func (s *Service) CreatePayment(ctx context.Context, userID uuid.UUID, orderID u
 	}
 
 	return s.processActivePayment(ctx, payment)
+}
+
+func (s *Service) ProcessSucceededPayment(ctx context.Context, providerPaymentID string) error {
+	const op = "payments.service.ProcessSucceededPayment"
+
+	providerPaymentID = strings.TrimSpace(providerPaymentID)
+	if providerPaymentID == "" {
+		return fmt.Errorf("%s: %w", op, ErrProviderPaymentIDRequired)
+	}
+
+	err := s.txManager.WithinTx(ctx, func(txCtx context.Context) error {
+		payment, err := s.repo.GetByProviderPaymentID(txCtx, providerPaymentID)
+		if err != nil {
+			return fmt.Errorf("get payment by provider payment id: %w", err)
+		}
+
+		if payment.Status == StatusCanceled {
+			return fmt.Errorf("payment already canceled: %w", ErrPaymentStatusTransitionInvalid)
+		}
+
+		orderDetails, err := s.ordersProvider.GetDetailsByID(txCtx, payment.OrderID)
+		if err != nil {
+			return fmt.Errorf("get order details: %w", err)
+		}
+
+		if orderDetails.Order.Status == orders.StatusPaid {
+			return nil
+		}
+
+		if orderDetails.Status != orders.StatusPending {
+			return fmt.Errorf("order is not pending: %w", ErrPaymentStatusTransitionInvalid)
+		}
+
+		if payment.Status != StatusSucceeded {
+			if err := s.repo.MarkSucceeded(txCtx, payment.ID); err != nil {
+				return fmt.Errorf("mark payment succeeded: %w", err)
+			}
+		}
+
+		if err := s.ordersProvider.MarkPaid(txCtx, orderDetails.Order.ID); err != nil {
+			return fmt.Errorf("mark order paid: %w", err)
+		}
+
+		reservedItems := reservedItemsFromOrder(orderDetails)
+
+		err = s.inventoryProvider.CommitReservedQuantities(txCtx, reservedItems)
+		if err != nil {
+			return fmt.Errorf("commit reserved inventory: %w", err)
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return fmt.Errorf("%s: %w", op, err)
+	}
+
+	return nil
+}
+
+func (s *Service) ProcessCanceledPayment(ctx context.Context, providerPaymentID string) error {
+	const op = "payments.service.ProcessCanceledPayment"
+
+	providerPaymentID = strings.TrimSpace(providerPaymentID)
+	if providerPaymentID == "" {
+		return fmt.Errorf("%s: %w", op, ErrProviderPaymentIDRequired)
+	}
+
+	err := s.txManager.WithinTx(ctx, func(txCtx context.Context) error {
+		payment, err := s.repo.GetByProviderPaymentID(txCtx, providerPaymentID)
+		if err != nil {
+			return fmt.Errorf("get payment by provider payment id: %w", err)
+		}
+
+		if payment.Status == StatusSucceeded {
+			return fmt.Errorf("payment already succeeded: %w", ErrPaymentStatusTransitionInvalid)
+		}
+
+		orderDetails, err := s.ordersProvider.GetDetailsByID(txCtx, payment.OrderID)
+		if err != nil {
+			return fmt.Errorf("get order details: %w", err)
+		}
+
+		if payment.Status != StatusCanceled {
+			if err := s.repo.MarkCanceled(txCtx, payment.ID); err != nil {
+				return fmt.Errorf("mark payment canceled: %w", err)
+			}
+		}
+
+		if orderDetails.Status == orders.StatusCanceled {
+			return nil
+		}
+
+		if orderDetails.Status != orders.StatusPending {
+			return fmt.Errorf("order is not pending: %w", ErrPaymentStatusTransitionInvalid)
+		}
+
+		if err := s.ordersProvider.MarkCanceled(txCtx, orderDetails.ID); err != nil {
+			return fmt.Errorf("mark order canceled: %w", err)
+		}
+
+		reservedItems := reservedItemsFromOrder(orderDetails)
+
+		if err := s.inventoryProvider.ReleaseReservedQuantities(txCtx, reservedItems); err != nil {
+			return fmt.Errorf("release reserved inventory: %w", err)
+		}
+
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("%s: %w", op, err)
+	}
+
+	return nil
 }
 
 func (s *Service) processActivePayment(
@@ -210,4 +334,18 @@ func (s *Service) createLocalPayment(ctx context.Context, details *orders.OrderD
 	}
 
 	return payment, nil
+}
+
+func reservedItemsFromOrder(orderDetails *orders.OrderDetails) []inventory.ReservedItem {
+	reservedItems := make([]inventory.ReservedItem, 0, len(orderDetails.Items))
+	for _, item := range orderDetails.Items {
+		reservedItem := inventory.ReservedItem{
+			ProductID: item.ProductID,
+			Quantity:  item.Quantity,
+		}
+
+		reservedItems = append(reservedItems, reservedItem)
+	}
+
+	return reservedItems
 }
