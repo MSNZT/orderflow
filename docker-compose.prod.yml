@@ -1,0 +1,31 @@
+name: orderflow_prod
+services:
+  api:
+    build: .
+    environment:
+      - CONFIG_PATH=/app/config/prod.yaml
+    env_file: .env.prod
+    ports:
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      - postgres
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    env_file: .env.prod
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  migrate:
+    image: migrate/migrate:v4.19.1
+    profiles:
+      - tools
+    volumes:
+      - "./migrations:/migrations:ro"
+    depends_on:
+      - postgres
+
+volumes:
+  postgres_data:
