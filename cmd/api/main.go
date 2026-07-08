@@ -35,6 +35,7 @@ import (
 	productshttp "github.com/MSNZT/orderflow/internal/transport/http/products"
 	"github.com/MSNZT/orderflow/internal/transport/http/router"
 	"github.com/MSNZT/orderflow/internal/transport/http/server"
+	"github.com/MSNZT/orderflow/internal/transport/http/webhooks"
 )
 
 func main() {
@@ -108,6 +109,8 @@ func main() {
 	)
 	paymentHandler := paymentshttp.NewHandler(log, paymentService)
 
+	webhookHandler := webhooks.NewHandler(log, paymentService)
+
 	router := router.NewRouter(log, tokenManager, router.RouterDependencies{
 		AuthHandler:     authHandler,
 		ProductsHandler: productsHandler,
@@ -115,6 +118,7 @@ func main() {
 		HealthHandler:   healthHandler,
 		OrderHandler:    orderHandler,
 		PaymentHandler:  paymentHandler,
+		WebhookHandler:  webhookHandler,
 	})
 
 	srv := server.New(cfg, log, router)

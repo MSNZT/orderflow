@@ -6,16 +6,17 @@ import (
 )
 
 var (
-	ErrInvalidArgument     = errors.New("invalid yookassa argument")
-	ErrInvalidRequest      = errors.New("invalid yookassa request")
-	ErrInvalidResponse     = errors.New("invalid yookassa response")
-	ErrInvalidCredentials  = errors.New("invalid yookassa credentials")
-	ErrForbidden           = errors.New("operation yookassa forbidden")
-	ErrNotFound            = errors.New("resource not found")
-	ErrRateLimited         = errors.New("rate limited")
-	ErrResultUnknown       = errors.New("operation result unknown")
-	ErrUnexpectedResponse  = errors.New("unexpected response")
-	ErrProviderUnavailable = errors.New("yookassa provider unavailable")
+	ErrInvalidArgument      = errors.New("invalid yookassa argument")
+	ErrInvalidRequest       = errors.New("invalid yookassa request")
+	ErrInvalidResponse      = errors.New("invalid yookassa response")
+	ErrInvalidCredentials   = errors.New("invalid yookassa credentials")
+	ErrForbidden            = errors.New("operation yookassa forbidden")
+	ErrNotFound             = errors.New("resource not found")
+	ErrRateLimited          = errors.New("rate limited")
+	ErrResultUnknown        = errors.New("operation result unknown")
+	ErrUnexpectedResponse   = errors.New("unexpected response")
+	ErrProviderUnavailable  = errors.New("yookassa provider unavailable")
+	ErrProviderPaymentEmpty = errors.New("provider payment id empty")
 )
 
 type APIError struct {

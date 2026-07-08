@@ -28,6 +28,7 @@ type OrdersProvider interface {
 
 type PaymentProvider interface {
 	CreatePayment(ctx context.Context, params ProviderCreateParams) (*ProviderCreateResult, error)
+	GetPayment(ctx context.Context, providerPaymentID string) (*ProviderPayment, error)
 }
 
 type InventoryProvider interface {

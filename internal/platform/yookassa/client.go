@@ -160,7 +160,7 @@ func (c *Client) GetPaymentByID(ctx context.Context, paymentID string) (*Payment
 		return nil, fmt.Errorf("%s: invalid payment id: %q: %w", op, paymentID, ErrInvalidArgument)
 	}
 
-	fullURL, err := url.JoinPath(c.apiURL, "payments", url.PathEscape(paymentID))
+	fullURL, err := url.JoinPath(c.apiURL, "payments", paymentID)
 	if err != nil {
 		return nil, fmt.Errorf("%s: failed to join url path: %w", op, err)
 	}

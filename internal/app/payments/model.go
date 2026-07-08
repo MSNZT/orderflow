@@ -25,6 +25,13 @@ type ProviderCreateResult struct {
 	ProviderCreatedAt time.Time
 }
 
+type ProviderPayment struct {
+	ID       string
+	Status   Status
+	Amount   int64
+	Currency string
+}
+
 type ProviderCreateParams struct {
 	AmountCents    int64
 	Currency       string

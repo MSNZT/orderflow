@@ -12,6 +12,7 @@ import (
 	"github.com/MSNZT/orderflow/internal/transport/http/orders"
 	"github.com/MSNZT/orderflow/internal/transport/http/payments"
 	"github.com/MSNZT/orderflow/internal/transport/http/products"
+	"github.com/MSNZT/orderflow/internal/transport/http/webhooks"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 )
@@ -23,6 +24,7 @@ type RouterDependencies struct {
 	HealthHandler   *health.Handler
 	OrderHandler    *orders.Handler
 	PaymentHandler  *payments.Handler
+	WebhookHandler  *webhooks.Handler
 }
 
 func NewRouter(log *slog.Logger, tokenParser httpmw.TokenParser, deps RouterDependencies) http.Handler {
@@ -82,6 +84,8 @@ func NewRouter(log *slog.Logger, tokenParser httpmw.TokenParser, deps RouterDepe
 				r.Post("/{orderID}/payments", deps.PaymentHandler.CreatePayment)
 			})
 		})
+
+		r.Post("/webhooks/yookassa", deps.WebhookHandler.YooKassa)
 
 	})
 	return r
