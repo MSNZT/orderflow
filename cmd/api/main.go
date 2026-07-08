@@ -109,7 +109,7 @@ func main() {
 	)
 	paymentHandler := paymentshttp.NewHandler(log, paymentService)
 
-	webhookHandler := webhooks.NewHandler(log, paymentService)
+	webhookHandler := webhooks.NewHandler(log, paymentService, paymentProvider)
 
 	router := router.NewRouter(log, tokenManager, router.RouterDependencies{
 		AuthHandler:     authHandler,

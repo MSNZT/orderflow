@@ -11,8 +11,8 @@ import (
 )
 
 type PaymentProcessor interface {
-	ProcessSucceededPayment(ctx context.Context, providerPaymentID string) error
-	ProcessCanceledPayment(ctx context.Context, providerPaymentID string) error
+	ProcessSucceededPayment(ctx context.Context, providerPayment payments.ProviderPayment) error
+	ProcessCanceledPayment(ctx context.Context, providerPayment payments.ProviderPayment) error
 }
 
 type Handler struct {
@@ -54,60 +54,110 @@ func (h *Handler) YooKassa(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	providerPayment, err := h.paymentProvider.GetPayment(r.Context(), req.Object.ID)
-	if err != nil {
-		response.BadRequestMsg(w, "failed to get payment")
-		return
-	}
-
-	if providerPayment.Status != payments.Status(req.Object.Status) {
-		response.BadRequestMsg(w, "payment status mismatch")
-		return
-	}
-
 	switch req.Event {
 	case "payment.succeeded":
-		if err := h.paymentProcessor.ProcessSucceededPayment(r.Context(), req.Object.ID); err != nil {
-			h.log.Error(
-				"failed to process yookassa payment succeeded webhook",
-				slog.String("op", op),
-				slog.String("provider_payment_id", req.Object.ID),
-				slog.Any("error", err),
-			)
-			response.InternalError(w)
-			return
-		}
-
-		response.NoContent(w)
+		h.processFinalPaymentEvent(
+			w,
+			r,
+			req,
+			payments.StatusSucceeded,
+			h.paymentProcessor.ProcessSucceededPayment,
+		)
 		return
-
 	case "payment.canceled":
-		if err := h.paymentProcessor.ProcessCanceledPayment(r.Context(), req.Object.ID); err != nil {
-			h.log.Error(
-				"failed to process yookassa payment canceled webhook",
-				slog.String("op", op),
-				slog.String("provider_payment_id", req.Object.ID),
-				slog.Any("error", err),
-			)
-			response.InternalError(w)
-			return
-		}
-
+		h.processFinalPaymentEvent(
+			w,
+			r,
+			req,
+			payments.StatusCanceled,
+			h.paymentProcessor.ProcessCanceledPayment,
+		)
+		return
+	case "payment.waiting_for_capture":
+		h.log.Info(
+			"ignored yookassa waiting_for_capture webhook",
+			slog.String("provider_payment_id", req.Object.ID),
+			slog.String("op", op),
+		)
 		response.NoContent(w)
 		return
 
 	default:
 		h.log.Info(
 			"ignored yookassa webhook event",
-			slog.String("op", op),
 			slog.String("event", req.Event),
 			slog.String("provider_payment_id", req.Object.ID),
-			slog.String("provider_status", req.Object.Status),
+			slog.String("op", op),
 		)
-
 		response.NoContent(w)
 		return
+
 	}
+}
+
+func (h *Handler) processFinalPaymentEvent(
+	w http.ResponseWriter, r *http.Request, req yookassaWebhookRequest, expectedStatus payments.Status,
+	process func(ctx context.Context, providerPayment payments.ProviderPayment) error) {
+	const op = "webhooks.handler.processFinalPaymentEvent"
+
+	providerPayment, err := h.paymentProvider.GetPayment(r.Context(), req.Object.ID)
+	if err != nil {
+		h.log.Error(
+			"failed to verify yookassa payment via provider api",
+			slog.String("op", op),
+			slog.String("provider_payment_id", req.Object.ID),
+			slog.Any("error", err),
+		)
+		response.InternalError(w)
+		return
+	}
+
+	if providerPayment == nil {
+		h.log.Error(
+			"provider payment is nil",
+			slog.String("op", op),
+		)
+		response.InternalError(w)
+		return
+	}
+
+	if providerPayment.ID != req.Object.ID {
+		h.log.Error(
+			"provider payment id mismatch",
+			slog.String("op", op),
+			slog.String("webhook_payment_id", req.Object.ID),
+			slog.String("provider_payment_id", providerPayment.ID),
+		)
+		response.InternalError(w)
+		return
+	}
+
+	if providerPayment.Status != expectedStatus {
+		h.log.Warn(
+			"provider payment status mismatch",
+			slog.String("op", op),
+			slog.String("provider_payment_id", req.Object.ID),
+			slog.String("webhook_event", req.Event),
+			slog.String("provider_status", string(providerPayment.Status)),
+			slog.String("expected_status", string(expectedStatus)),
+		)
+		response.InternalError(w)
+		return
+	}
+
+	if err := process(r.Context(), *providerPayment); err != nil {
+		h.log.Error(
+			"failed to process yookassa payment event",
+			slog.String("op", op),
+			slog.String("provider_payment_id", req.Object.ID),
+			slog.String("expected_status", string(expectedStatus)),
+			slog.Any("error", err),
+		)
+		response.InternalError(w)
+		return
+	}
+
+	response.NoContent(w)
 }
 
 func validateYooKassaPaymentEvent(req yookassaWebhookRequest) bool {

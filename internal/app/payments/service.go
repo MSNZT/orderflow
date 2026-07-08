@@ -75,10 +75,10 @@ func (s *Service) CreatePayment(ctx context.Context, userID uuid.UUID, orderID u
 	return s.processActivePayment(ctx, payment)
 }
 
-func (s *Service) ProcessSucceededPayment(ctx context.Context, providerPaymentID string) error {
+func (s *Service) ProcessSucceededPayment(ctx context.Context, providerPayment ProviderPayment) error {
 	const op = "payments.service.ProcessSucceededPayment"
 
-	providerPaymentID = strings.TrimSpace(providerPaymentID)
+	providerPaymentID := strings.TrimSpace(providerPayment.ID)
 	if providerPaymentID == "" {
 		return fmt.Errorf("%s: %w", op, ErrProviderPaymentIDRequired)
 	}
@@ -89,8 +89,17 @@ func (s *Service) ProcessSucceededPayment(ctx context.Context, providerPaymentID
 			return fmt.Errorf("get payment by provider payment id: %w", err)
 		}
 
+		if payment == nil {
+			return fmt.Errorf("%s: payment is nil", op)
+		}
+
 		if payment.Status == StatusCanceled {
 			return fmt.Errorf("payment already canceled: %w", ErrPaymentStatusTransitionInvalid)
+		}
+
+		err = validateProviderPayment(providerPayment, *payment, StatusSucceeded)
+		if err != nil {
+			return fmt.Errorf("%s: %w", op, err)
 		}
 
 		orderDetails, err := s.ordersProvider.GetDetailsByID(txCtx, payment.OrderID)
@@ -133,10 +142,10 @@ func (s *Service) ProcessSucceededPayment(ctx context.Context, providerPaymentID
 	return nil
 }
 
-func (s *Service) ProcessCanceledPayment(ctx context.Context, providerPaymentID string) error {
+func (s *Service) ProcessCanceledPayment(ctx context.Context, providerPayment ProviderPayment) error {
 	const op = "payments.service.ProcessCanceledPayment"
 
-	providerPaymentID = strings.TrimSpace(providerPaymentID)
+	providerPaymentID := strings.TrimSpace(providerPayment.ID)
 	if providerPaymentID == "" {
 		return fmt.Errorf("%s: %w", op, ErrProviderPaymentIDRequired)
 	}
@@ -144,11 +153,20 @@ func (s *Service) ProcessCanceledPayment(ctx context.Context, providerPaymentID 
 	err := s.txManager.WithinTx(ctx, func(txCtx context.Context) error {
 		payment, err := s.repo.GetByProviderPaymentID(txCtx, providerPaymentID)
 		if err != nil {
-			return fmt.Errorf("get payment by provider payment id: %w", err)
+			return fmt.Errorf("%s: get payment by provider payment id: %w", op, err)
+		}
+
+		if payment == nil {
+			return fmt.Errorf("%s: payment is nil", op)
 		}
 
 		if payment.Status == StatusSucceeded {
 			return fmt.Errorf("payment already succeeded: %w", ErrPaymentStatusTransitionInvalid)
+		}
+
+		err = validateProviderPayment(providerPayment, *payment, StatusCanceled)
+		if err != nil {
+			return fmt.Errorf("%s: %w", op, err)
 		}
 
 		orderDetails, err := s.ordersProvider.GetDetailsByID(txCtx, payment.OrderID)
@@ -348,4 +366,32 @@ func reservedItemsFromOrder(orderDetails *orders.OrderDetails) []inventory.Reser
 	}
 
 	return reservedItems
+}
+
+func validateProviderPayment(
+	providerPayment ProviderPayment,
+	localPayment Payment,
+	expectedStatus Status,
+) error {
+	if localPayment.ProviderPaymentID == nil {
+		return ErrProviderPaymentIDRequired
+	}
+
+	if providerPayment.ID != *localPayment.ProviderPaymentID {
+		return ErrProviderPaymentIDMismatch
+	}
+
+	if providerPayment.Status != expectedStatus {
+		return ErrPaymentStatusTransitionInvalid
+	}
+
+	if providerPayment.AmountCents != localPayment.AmountCents {
+		return ErrPaymentAmountMismatch
+	}
+
+	if providerPayment.Currency != localPayment.Currency {
+		return ErrPaymentCurrencyMismatch
+	}
+
+	return nil
 }
