@@ -16,4 +16,7 @@ var (
 	ErrOrderExpired                   = errors.New("order expired")
 	ErrProviderPaymentIDRequired      = errors.New("provider payment id required")
 	ErrPaymentStatusTransitionInvalid = errors.New("payment status transition invalid")
+	ErrPaymentAmountMismatch          = errors.New("payment amount mismatch")
+	ErrPaymentCurrencyMismatch        = errors.New("payment currency mismatch")
+	ErrProviderPaymentIDMismatch      = errors.New("provider payment id mismatch")
 )

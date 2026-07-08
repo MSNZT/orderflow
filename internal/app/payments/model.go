@@ -26,10 +26,10 @@ type ProviderCreateResult struct {
 }
 
 type ProviderPayment struct {
-	ID       string
-	Status   Status
-	Amount   int64
-	Currency string
+	ID          string
+	Status      Status
+	AmountCents int64
+	Currency    string
 }
 
 type ProviderCreateParams struct {
