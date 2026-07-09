@@ -10,6 +10,7 @@ import (
 
 	authapp "github.com/MSNZT/orderflow/internal/app/auth"
 	cartapp "github.com/MSNZT/orderflow/internal/app/cart"
+	"github.com/MSNZT/orderflow/internal/app/jobs"
 	ordersapp "github.com/MSNZT/orderflow/internal/app/orders"
 	paymentsapp "github.com/MSNZT/orderflow/internal/app/payments"
 	productsapp "github.com/MSNZT/orderflow/internal/app/products"
@@ -26,6 +27,7 @@ import (
 	"github.com/MSNZT/orderflow/internal/infrastructure/postgres/sessions"
 	usersrepo "github.com/MSNZT/orderflow/internal/infrastructure/postgres/users"
 	"github.com/MSNZT/orderflow/internal/infrastructure/token"
+	"github.com/MSNZT/orderflow/internal/platform/worker"
 	"github.com/MSNZT/orderflow/internal/platform/yookassa"
 	authhttp "github.com/MSNZT/orderflow/internal/transport/http/auth"
 	carthttp "github.com/MSNZT/orderflow/internal/transport/http/cart"
@@ -109,6 +111,10 @@ func main() {
 	paymentHandler := paymentshttp.NewHandler(log, paymentService)
 
 	webhookHandler := webhooks.NewHandler(log, paymentService, paymentProvider)
+
+	workers := worker.New(log)
+	jobs.RegisterOrderExpiration(workers, orderService, cfg.Orders, log)
+	workers.StartAll(ctx)
 
 	router := router.NewRouter(log, tokenManager, router.RouterDependencies{
 		AuthHandler:     authHandler,
