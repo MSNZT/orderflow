@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	paymentsapp "github.com/MSNZT/orderflow/internal/app/payments"
 	"github.com/MSNZT/orderflow/internal/infrastructure/postgres"
@@ -117,6 +118,28 @@ func (r *Repository) GetActiveByOrderID(ctx context.Context, orderID uuid.UUID) 
 	}
 
 	return &p, nil
+}
+
+func (r *Repository) CancelActiveByOrderID(ctx context.Context, orderID uuid.UUID, now time.Time) error {
+	const op = "payments.repository.CancelActiveByOrderID"
+
+	query := `
+		UPDATE payments
+		SET status = 'canceled',
+			updated_at = $2,
+			canceled_at = $2
+		WHERE order_id = $1 
+			AND status IN ('creating', 'pending', 'waiting_for_capture');
+	`
+
+	db := postgres.ExecutorFromContext(ctx, r.db)
+
+	_, err := db.Exec(ctx, query, orderID, now)
+	if err != nil {
+		return fmt.Errorf("%s: failed to cancel active payment %w", op, err)
+	}
+
+	return nil
 }
 
 func (r *Repository) GetByProviderPaymentID(ctx context.Context, providerPaymentID string) (*paymentsapp.Payment, error) {

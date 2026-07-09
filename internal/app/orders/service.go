@@ -18,6 +18,7 @@ type Service struct {
 	repo          Repository
 	inventoryRepo InventoryRepository
 	cartService   CartProvider
+	paymentRepo   PaymentRepository
 	txManager     transaction.Manager
 	paymentTTL    time.Duration
 }
@@ -26,16 +27,23 @@ func NewService(
 	repo Repository,
 	inventoryRepo InventoryRepository,
 	cartService CartProvider,
+	paymentRepo PaymentRepository,
 	txManager transaction.Manager,
 	paymentTTL time.Duration) *Service {
 	return &Service{
 		repo:          repo,
 		inventoryRepo: inventoryRepo,
 		cartService:   cartService,
+		paymentRepo:   paymentRepo,
 		txManager:     txManager,
 		paymentTTL:    paymentTTL,
 	}
 }
+
+const (
+	minExpireLimit = 100
+	maxExpireLimit = 200
+)
 
 func (s *Service) ListByUserID(ctx context.Context, userID uuid.UUID, page int, limit int) ([]Order, error) {
 	const op = "orders.service.ListByUserID"
@@ -238,4 +246,74 @@ func (s *Service) CreateOrder(ctx context.Context, userID uuid.UUID, productIDs 
 	}
 
 	return &order, nil
+}
+
+func (s *Service) ExpireOverdueOrders(ctx context.Context, now time.Time, limit int) (int, error) {
+	const op = "orders.service.ExpireOverdueOrders"
+
+	if now.IsZero() {
+		now = time.Now().UTC()
+	}
+
+	if limit < minExpireLimit {
+		limit = minExpireLimit
+	}
+
+	if limit > maxExpireLimit {
+		limit = maxExpireLimit
+	}
+
+	var expiredCount int
+
+	err := s.txManager.WithinTx(ctx, func(txCtx context.Context) error {
+		overdueOrderIDs, err := s.repo.FindExpiredPendingIDs(txCtx, now, limit)
+		if err != nil {
+			return fmt.Errorf("failed to find expired orders: %w", err)
+		}
+
+		if len(overdueOrderIDs) == 0 {
+			return nil
+		}
+
+		for _, orderID := range overdueOrderIDs {
+			details, err := s.repo.GetDetailsByID(txCtx, orderID)
+			if err != nil {
+				return fmt.Errorf("failed to get order items by id: %w", err)
+			}
+
+			reservedItems := make([]inventory.ReservedItem, 0, len(details.Items))
+			for _, orderItem := range details.Items {
+				reservedItem := inventory.ReservedItem{
+					ProductID: orderItem.ProductID,
+					Quantity:  orderItem.Quantity,
+				}
+
+				reservedItems = append(reservedItems, reservedItem)
+			}
+
+			err = s.inventoryRepo.ReleaseReservedQuantities(txCtx, reservedItems)
+			if err != nil {
+				return fmt.Errorf("failed to release reserved quantities: %w", err)
+			}
+
+			err = s.paymentRepo.CancelActiveByOrderID(txCtx, orderID, now)
+			if err != nil {
+				return fmt.Errorf("failed to cancel active payment: %w", err)
+			}
+
+			err = s.repo.MarkExpired(txCtx, orderID)
+			if err != nil {
+				return fmt.Errorf("failed to mark expired active order: %w", err)
+			}
+
+			expiredCount += 1
+		}
+
+		return nil
+	})
+	if err != nil {
+		return 0, fmt.Errorf("%s: %w", op, err)
+	}
+
+	return expiredCount, nil
 }

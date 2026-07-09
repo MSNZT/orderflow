@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	ordersapp "github.com/MSNZT/orderflow/internal/app/orders"
 	"github.com/MSNZT/orderflow/internal/infrastructure/postgres"
@@ -342,6 +343,47 @@ func (r *Repository) MarkExpired(ctx context.Context, orderID uuid.UUID) error {
 	}
 
 	return nil
+}
+
+func (r *Repository) FindExpiredPendingIDs(ctx context.Context, now time.Time, limit int) ([]uuid.UUID, error) {
+	const op = "orders.repository.FindExpiredPending"
+
+	query := `
+		SELECT 
+			id
+		FROM orders
+		WHERE status = 'pending' 
+			AND expires_at < $1
+		ORDER BY expires_at ASC
+		LIMIT $2
+		FOR UPDATE SKIP LOCKED;
+	`
+
+	db := postgres.ExecutorFromContext(ctx, r.db)
+	overdueOrderIDs := make([]uuid.UUID, 0)
+
+	rows, err := db.Query(ctx, query, now, limit)
+	if err != nil {
+		return nil, fmt.Errorf("%s: failed to query overdue orders %w", op, err)
+	}
+
+	defer rows.Close()
+
+	for rows.Next() {
+		var orderID uuid.UUID
+
+		err := rows.Scan(&orderID)
+		if err != nil {
+			return nil, fmt.Errorf("%s: scan overdue order row: %w", op, err)
+		}
+
+		overdueOrderIDs = append(overdueOrderIDs, orderID)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("%s: failed to iterate rows: %w", op, err)
+	}
+
+	return overdueOrderIDs, nil
 }
 
 func (r *Repository) markFromPending(ctx context.Context, orderID uuid.UUID, status ordersapp.Status, op string) error {

@@ -84,29 +84,28 @@ func main() {
 	}
 
 	sessionsRepository := sessions.NewRepository(dbPool)
-	authService := authapp.NewService(usersService, tokenManager, sessionsRepository, cfg.JWT.RefreshTTL)
-	authHandler := authhttp.NewHandler(log, usersService, authService)
-
 	productsRepository := productsrepo.NewRepository(dbPool)
 	inventoryRepository := inventory.NewRepository(dbPool)
-	productsService := productsapp.NewService(productsRepository, inventoryRepository, txManager)
-	productsHandler := productshttp.NewHandler(log, productsService)
-
 	cartRepository := cartrepo.NewRepository(dbPool)
-	cartService := cartapp.NewService(cartRepository, txManager, productsService)
-	cartHandler := carthttp.NewHandler(log, cartService)
-
 	orderRepository := ordersrepo.NewRepository(dbPool)
-	orderService := ordersapp.NewService(
-		orderRepository, inventoryRepository, cartService, txManager, cfg.Orders.PaymentTTL,
-	)
-	orderHandler := ordershttp.NewHandler(log, orderService)
-
 	paymentRepository := paymentsrepo.NewRepository(dbPool)
+
 	paymentProvider := yookassa.NewProvider(yookassaClient)
+
+	authService := authapp.NewService(usersService, tokenManager, sessionsRepository, cfg.JWT.RefreshTTL)
+	productsService := productsapp.NewService(productsRepository, inventoryRepository, txManager)
+	cartService := cartapp.NewService(cartRepository, txManager, productsService)
+	orderService := ordersapp.NewService(
+		orderRepository, inventoryRepository, cartService, paymentRepository, txManager, cfg.Orders.PaymentTTL,
+	)
 	paymentService := paymentsapp.NewService(
 		paymentRepository, orderRepository, paymentProvider, inventoryRepository, txManager,
 	)
+
+	authHandler := authhttp.NewHandler(log, usersService, authService)
+	productsHandler := productshttp.NewHandler(log, productsService)
+	cartHandler := carthttp.NewHandler(log, cartService)
+	orderHandler := ordershttp.NewHandler(log, orderService)
 	paymentHandler := paymentshttp.NewHandler(log, paymentService)
 
 	webhookHandler := webhooks.NewHandler(log, paymentService, paymentProvider)
