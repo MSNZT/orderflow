@@ -79,7 +79,7 @@ func (h *Handler) YooKassa(w http.ResponseWriter, r *http.Request) {
 			slog.String("provider_payment_id", req.Object.ID),
 			slog.String("op", op),
 		)
-		response.NoContent(w)
+		w.WriteHeader(http.StatusOK)
 		return
 
 	default:
@@ -89,7 +89,7 @@ func (h *Handler) YooKassa(w http.ResponseWriter, r *http.Request) {
 			slog.String("provider_payment_id", req.Object.ID),
 			slog.String("op", op),
 		)
-		response.NoContent(w)
+		w.WriteHeader(http.StatusOK)
 		return
 
 	}
@@ -110,6 +110,7 @@ func (h *Handler) processFinalPaymentEvent(
 		)
 		response.InternalError(w)
 		return
+
 	}
 
 	if providerPayment == nil {
@@ -157,7 +158,7 @@ func (h *Handler) processFinalPaymentEvent(
 		return
 	}
 
-	response.NoContent(w)
+	w.WriteHeader(http.StatusOK)
 }
 
 func validateYooKassaPaymentEvent(req yookassaWebhookRequest) bool {
