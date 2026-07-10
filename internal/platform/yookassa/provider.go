@@ -105,7 +105,7 @@ func (p *Provider) GetPayment(ctx context.Context, providerPaymentID string) (*p
 	}, nil
 }
 
-func (p *Provider) CapturePayment(ctx context.Context, input payments.CapturePaymentInput) (*Payment, error) {
+func (p *Provider) CapturePayment(ctx context.Context, input payments.CapturePaymentInput) (*payments.ProviderPayment, error) {
 	const op = "yookassa.provider.CapturePayment"
 	req := CapturePaymentInput{
 		ProviderPaymentID: input.ProviderPaymentID,
@@ -119,10 +119,27 @@ func (p *Provider) CapturePayment(ctx context.Context, input payments.CapturePay
 		return nil, fmt.Errorf("%s: capture payment: %w", op, err)
 	}
 
-	return payment, nil
+	status, err := mapPaymentStatus(payment.Status)
+	if err != nil {
+		return nil, fmt.Errorf("%s: map payment status: %w", op, err)
+	}
+
+	amountCents, err := parseAmountCents(payment.Money.Value)
+	if err != nil {
+		return nil, fmt.Errorf("%s: parse amount: %w", op, err)
+	}
+
+	providerPayment := payments.ProviderPayment{
+		ID:          payment.ID,
+		Status:      status,
+		AmountCents: amountCents,
+		Currency:    payment.Money.Currency,
+	}
+
+	return &providerPayment, nil
 }
 
-func (p *Provider) CancelPayment(ctx context.Context, input payments.CancelPaymentInput) (*Payment, error) {
+func (p *Provider) CancelPayment(ctx context.Context, input payments.CancelPaymentInput) (*payments.ProviderPayment, error) {
 	const op = "yookassa.provider.CapturePayment"
 	req := CancelPaymentInput{
 		ProviderPaymentID: input.ProviderPaymentID,
@@ -131,10 +148,27 @@ func (p *Provider) CancelPayment(ctx context.Context, input payments.CancelPayme
 
 	payment, err := p.client.CancelPayment(ctx, req)
 	if err != nil {
-		return nil, fmt.Errorf("%s: cancel payment: %w", op, err)
+		return nil, fmt.Errorf("%s: capture payment: %w", op, err)
 	}
 
-	return payment, nil
+	status, err := mapPaymentStatus(payment.Status)
+	if err != nil {
+		return nil, fmt.Errorf("%s: map payment status: %w", op, err)
+	}
+
+	amountCents, err := parseAmountCents(payment.Money.Value)
+	if err != nil {
+		return nil, fmt.Errorf("%s: parse amount: %w", op, err)
+	}
+
+	providerPayment := payments.ProviderPayment{
+		ID:          payment.ID,
+		Status:      status,
+		AmountCents: amountCents,
+		Currency:    payment.Money.Currency,
+	}
+
+	return &providerPayment, nil
 }
 
 func mapPaymentStatus(status PaymentStatus) (payments.Status, error) {

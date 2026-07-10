@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -263,12 +264,20 @@ func (c *Client) executePaymentAction(
 		return nil, fmt.Errorf("%s: failed to join url path: %w", op, err)
 	}
 
-	jsonData, err := json.Marshal(body)
-	if err != nil {
-		return nil, fmt.Errorf("%s: failed to json encoding: %w", op, err)
+	var reqBody io.Reader
+	if body != nil {
+		jsonData, err := json.Marshal(body)
+		if err != nil {
+			return nil, fmt.Errorf("%s: marshal body: %w", op, err)
+		}
+		reqBody = bytes.NewReader(jsonData)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, fullURL, bytes.NewReader(jsonData))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, fullURL, reqBody)
+	if err != nil {
+		return nil, fmt.Errorf("%s: create request: %w", op, err)
+	}
+
 	req.SetBasicAuth(c.shopID, c.secretKey)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Idempotence-Key", idempotencyKey)
