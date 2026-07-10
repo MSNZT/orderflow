@@ -3,6 +3,7 @@ package yookassa
 import (
 	"errors"
 	"fmt"
+	"net/http"
 )
 
 var (
@@ -49,4 +50,25 @@ func (e *APIError) Error() string {
 
 func (e *APIError) Unwrap() error {
 	return e.Cause
+}
+
+func mapHTTPStatusError(statusCode int) error {
+	switch {
+	case statusCode >= http.StatusInternalServerError && statusCode <= 599:
+		return ErrResultUnknown
+
+	case statusCode == http.StatusBadRequest:
+		return ErrInvalidRequest
+	case statusCode == http.StatusUnauthorized:
+		return ErrInvalidCredentials
+	case statusCode == http.StatusForbidden:
+		return ErrForbidden
+	case statusCode == http.StatusNotFound:
+		return ErrNotFound
+	case statusCode == http.StatusTooManyRequests:
+		return ErrRateLimited
+
+	default:
+		return ErrUnexpectedResponse
+	}
 }
