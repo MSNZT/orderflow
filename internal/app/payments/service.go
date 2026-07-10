@@ -97,7 +97,7 @@ func (s *Service) ProcessSucceededPayment(ctx context.Context, providerPayment P
 			return fmt.Errorf("payment already canceled: %w", ErrPaymentStatusTransitionInvalid)
 		}
 
-		err = validateProviderPayment(providerPayment, *payment, StatusSucceeded)
+		err = validateProviderPayment(providerPayment, payment, StatusSucceeded)
 		if err != nil {
 			return fmt.Errorf("%s: %w", op, err)
 		}
@@ -164,7 +164,7 @@ func (s *Service) ProcessCanceledPayment(ctx context.Context, providerPayment Pr
 			return fmt.Errorf("payment already succeeded: %w", ErrPaymentStatusTransitionInvalid)
 		}
 
-		err = validateProviderPayment(providerPayment, *payment, StatusCanceled)
+		err = validateProviderPayment(providerPayment, payment, StatusCanceled)
 		if err != nil {
 			return fmt.Errorf("%s: %w", op, err)
 		}
@@ -202,6 +202,184 @@ func (s *Service) ProcessCanceledPayment(ctx context.Context, providerPayment Pr
 	})
 	if err != nil {
 		return fmt.Errorf("%s: %w", op, err)
+	}
+
+	return nil
+}
+
+func (s *Service) ProcessWaitingForCapturePayment(
+	ctx context.Context, providerPayment ProviderPayment, now time.Time) error {
+	const op = "payments.service.ProcessWaitingForCapturePayment"
+
+	providerPaymentID := strings.TrimSpace(providerPayment.ID)
+	if providerPaymentID == "" {
+		return fmt.Errorf("%s: %w", op, ErrProviderPaymentIDRequired)
+	}
+
+	var (
+		action         PaymentAction
+		captureInput   CapturePaymentInput
+		cancelInput    CancelPaymentInput
+		reservedItems  []inventory.ReservedItem
+		orderID        uuid.UUID
+		localPaymentID uuid.UUID
+	)
+
+	err := s.txManager.WithinTx(ctx, func(txCtx context.Context) error {
+		payment, err := s.repo.GetByProviderPaymentID(txCtx, providerPaymentID)
+		if err != nil {
+			return fmt.Errorf("%s: get payment by provider payment id: %w", op, err)
+		}
+
+		if payment == nil {
+			return fmt.Errorf("%s: payment is nil", op)
+		}
+		localPaymentID = payment.ID
+
+		if payment.Status == StatusSucceeded {
+			return fmt.Errorf("payment already succeeded: %w", ErrPaymentStatusTransitionInvalid)
+		}
+
+		if payment.Status == StatusCanceled {
+			return fmt.Errorf("payment already canceled: %w", ErrPaymentStatusTransitionInvalid)
+		}
+
+		err = validateProviderPayment(providerPayment, payment, StatusWaitingForCapture)
+		if err != nil {
+			return fmt.Errorf("%s: %w", op, err)
+		}
+
+		orderDetails, err := s.ordersProvider.GetDetailsByID(txCtx, payment.OrderID)
+		if err != nil {
+			return fmt.Errorf("get order details: %w", err)
+		}
+
+		reservedItems = reservedItemsFromOrder(orderDetails)
+		orderID = orderDetails.ID
+
+		if payment.Status != StatusWaitingForCapture {
+			if err := s.repo.MarkWaitingForCapture(txCtx, payment.ID); err != nil {
+				return fmt.Errorf("mark payment canceled: %w", err)
+			}
+		}
+
+		switch {
+		case orderDetails.Status == orders.StatusPending &&
+			orderDetails.ExpiresAt.After(now):
+
+			action = paymentActionCapture
+			captureInput = CapturePaymentInput{
+				ProviderPaymentID: *payment.ProviderPaymentID,
+				IdempotencyKey:    payment.IdempotencyKey.String(),
+				AmountCents:       payment.AmountCents,
+				Currency:          payment.Currency,
+			}
+
+		case orderDetails.Status == orders.StatusPending:
+			action = paymentActionExpired
+			cancelInput = CancelPaymentInput{
+				ProviderPaymentID: *payment.ProviderPaymentID,
+				IdempotencyKey:    payment.IdempotencyKey.String(),
+			}
+
+		case orderDetails.Status == orders.StatusExpired,
+			orderDetails.Status == orders.StatusCanceled:
+
+			action = paymentActionCancel
+			cancelInput = CancelPaymentInput{
+				ProviderPaymentID: *payment.ProviderPaymentID,
+				IdempotencyKey:    payment.IdempotencyKey.String(),
+			}
+
+		default:
+			return ErrPaymentStatusTransitionInvalid
+		}
+
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("%s: %w", op, err)
+	}
+
+	switch action {
+	case paymentActionCapture:
+		_, err := s.paymentProvider.CapturePayment(ctx, captureInput)
+		if err != nil {
+			return fmt.Errorf("%s: capture payment: %w", op, err)
+		}
+
+		err = s.txManager.WithinTx(ctx, func(txCtx context.Context) error {
+			if err := s.ordersProvider.MarkPaid(txCtx, orderID); err != nil {
+				return fmt.Errorf("mark paid order: %w", err)
+			}
+
+			if err := s.repo.MarkSucceeded(txCtx, localPaymentID); err != nil {
+				return fmt.Errorf("%s: mark succeeded payment: %w", op, err)
+			}
+
+			if err := s.inventoryProvider.CommitReservedQuantities(txCtx, reservedItems); err != nil {
+				return fmt.Errorf("%s: commit reserved quantities: %w", op, err)
+			}
+
+			return nil
+		})
+
+		if err != nil {
+			return fmt.Errorf("%s: %w", op, err)
+		}
+
+	case paymentActionCancel:
+		_, err := s.paymentProvider.CancelPayment(ctx, cancelInput)
+		if err != nil {
+			return fmt.Errorf("%s: cancel payment: %w", op, err)
+		}
+
+		err = s.txManager.WithinTx(ctx, func(txCtx context.Context) error {
+			if err := s.ordersProvider.MarkCanceled(txCtx, orderID); err != nil {
+				return fmt.Errorf("mark canceled order: %w", err)
+			}
+
+			if err := s.repo.MarkCanceled(txCtx, localPaymentID); err != nil {
+				return fmt.Errorf("%s: mark canceled payment: %w", op, err)
+			}
+
+			if err := s.inventoryProvider.ReleaseReservedQuantities(txCtx, reservedItems); err != nil {
+				return fmt.Errorf("%s: release reserved quantities: %w", op, err)
+			}
+
+			return nil
+		})
+
+		if err != nil {
+			return fmt.Errorf("%s: %w", op, err)
+		}
+
+	case paymentActionExpired:
+		_, err := s.paymentProvider.CancelPayment(ctx, cancelInput)
+		if err != nil {
+			return fmt.Errorf("%s: cancel payment: %w", op, err)
+		}
+
+		err = s.txManager.WithinTx(ctx, func(txCtx context.Context) error {
+			if err := s.ordersProvider.MarkExpired(txCtx, orderID); err != nil {
+				return fmt.Errorf("mark expired order: %w", err)
+			}
+
+			if err := s.repo.MarkCanceled(txCtx, localPaymentID); err != nil {
+				return fmt.Errorf("%s: mark canceled payment: %w", op, err)
+			}
+
+			if err := s.inventoryProvider.ReleaseReservedQuantities(txCtx, reservedItems); err != nil {
+				return fmt.Errorf("%s: release reserved quantities: %w", op, err)
+			}
+
+			return nil
+		})
+
+		if err != nil {
+			return fmt.Errorf("%s: %w", op, err)
+		}
+
 	}
 
 	return nil
@@ -370,7 +548,7 @@ func reservedItemsFromOrder(orderDetails *orders.OrderDetails) []inventory.Reser
 
 func validateProviderPayment(
 	providerPayment ProviderPayment,
-	localPayment Payment,
+	localPayment *Payment,
 	expectedStatus Status,
 ) error {
 	if localPayment.ProviderPaymentID == nil {

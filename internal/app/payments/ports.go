@@ -15,6 +15,7 @@ type Repository interface {
 	MarkFailed(ctx context.Context, paymentID uuid.UUID) error
 	MarkSucceeded(ctx context.Context, paymentID uuid.UUID) error
 	MarkCanceled(ctx context.Context, paymentID uuid.UUID) error
+	MarkWaitingForCapture(ctx context.Context, paymentID uuid.UUID) error
 	GetActiveByOrderID(ctx context.Context, orderID uuid.UUID) (*Payment, error)
 	GetByProviderPaymentID(ctx context.Context, providerPaymentID string) (*Payment, error)
 }
@@ -24,6 +25,7 @@ type OrdersProvider interface {
 	GetDetailsByID(ctx context.Context, orderID uuid.UUID) (details *orders.OrderDetails, err error)
 	MarkPaid(ctx context.Context, orderID uuid.UUID) error
 	MarkCanceled(ctx context.Context, orderID uuid.UUID) error
+	MarkExpired(ctx context.Context, orderID uuid.UUID) error
 }
 
 type PaymentProvider interface {

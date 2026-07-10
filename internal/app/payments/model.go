@@ -8,6 +8,14 @@ import (
 
 type Status string
 
+type PaymentAction string
+
+const (
+	paymentActionCapture PaymentAction = "capture"
+	paymentActionCancel  PaymentAction = "cancel"
+	paymentActionExpired PaymentAction = "expired"
+)
+
 const (
 	StatusCreating          Status = "creating"
 	StatusPending           Status = "pending"
