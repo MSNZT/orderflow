@@ -129,7 +129,7 @@ func (r *Repository) CancelActiveByOrderID(ctx context.Context, orderID uuid.UUI
 			updated_at = $2,
 			canceled_at = $2
 		WHERE order_id = $1 
-			AND status IN ('creating', 'pending', 'waiting_for_capture');
+			AND status IN ('creating', 'pending');
 	`
 
 	db := postgres.ExecutorFromContext(ctx, r.db)
@@ -140,6 +140,36 @@ func (r *Repository) CancelActiveByOrderID(ctx context.Context, orderID uuid.UUI
 	}
 
 	return nil
+}
+
+func (r *Repository) HasWaitingForCaptureByOrderID(ctx context.Context, orderID uuid.UUID) (bool, error) {
+	const op = "payments.repository.HasWaitingForCaptureByOrderID"
+
+	if orderID == uuid.Nil {
+		return false, fmt.Errorf("%s: %w", op, paymentsapp.ErrOrderIDIsNil)
+	}
+
+	query := `
+		SELECT EXISTS (
+			SELECT 1
+			FROM payments
+			WHERE order_id = $1
+			  AND status = 'waiting_for_capture'
+		)
+	`
+
+	db := postgres.ExecutorFromContext(ctx, r.db)
+
+	var exists bool
+	if err := db.QueryRow(ctx, query, orderID).Scan(&exists); err != nil {
+		return false, fmt.Errorf(
+			"%s: check waiting for capture payment: %w",
+			op,
+			err,
+		)
+	}
+
+	return exists, nil
 }
 
 func (r *Repository) GetByProviderPaymentID(ctx context.Context, providerPaymentID string) (*paymentsapp.Payment, error) {

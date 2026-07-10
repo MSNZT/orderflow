@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/MSNZT/orderflow/internal/app/payments"
 	"github.com/MSNZT/orderflow/internal/transport/http/response"
@@ -13,6 +14,7 @@ import (
 type PaymentProcessor interface {
 	ProcessSucceededPayment(ctx context.Context, providerPayment payments.ProviderPayment) error
 	ProcessCanceledPayment(ctx context.Context, providerPayment payments.ProviderPayment) error
+	ProcessWaitingForCapturePayment(ctx context.Context, payment payments.ProviderPayment, now time.Time) error
 }
 
 type Handler struct {
@@ -56,7 +58,7 @@ func (h *Handler) YooKassa(w http.ResponseWriter, r *http.Request) {
 
 	switch req.Event {
 	case "payment.succeeded":
-		h.processFinalPaymentEvent(
+		h.processPaymentEvent(
 			w,
 			r,
 			req,
@@ -64,8 +66,9 @@ func (h *Handler) YooKassa(w http.ResponseWriter, r *http.Request) {
 			h.paymentProcessor.ProcessSucceededPayment,
 		)
 		return
+
 	case "payment.canceled":
-		h.processFinalPaymentEvent(
+		h.processPaymentEvent(
 			w,
 			r,
 			req,
@@ -73,29 +76,32 @@ func (h *Handler) YooKassa(w http.ResponseWriter, r *http.Request) {
 			h.paymentProcessor.ProcessCanceledPayment,
 		)
 		return
+
 	case "payment.waiting_for_capture":
-		h.log.Info(
-			"ignored yookassa waiting_for_capture webhook",
-			slog.String("provider_payment_id", req.Object.ID),
-			slog.String("op", op),
+		h.processPaymentEvent(
+			w,
+			r,
+			req,
+			payments.StatusWaitingForCapture,
+			func(
+				ctx context.Context,
+				providerPayment payments.ProviderPayment,
+			) error {
+				return h.paymentProcessor.ProcessWaitingForCapturePayment(
+					ctx,
+					providerPayment,
+					time.Now().UTC(),
+				)
+			},
 		)
-		w.WriteHeader(http.StatusOK)
 		return
 
 	default:
-		h.log.Info(
-			"ignored yookassa webhook event",
-			slog.String("event", req.Event),
-			slog.String("provider_payment_id", req.Object.ID),
-			slog.String("op", op),
-		)
-		w.WriteHeader(http.StatusOK)
 		return
-
 	}
 }
 
-func (h *Handler) processFinalPaymentEvent(
+func (h *Handler) processPaymentEvent(
 	w http.ResponseWriter, r *http.Request, req yookassaWebhookRequest, expectedStatus payments.Status,
 	process func(ctx context.Context, providerPayment payments.ProviderPayment) error) {
 	const op = "webhooks.handler.processFinalPaymentEvent"

@@ -2,6 +2,7 @@ package payments
 
 import (
 	"context"
+	"time"
 
 	"github.com/MSNZT/orderflow/internal/app/inventory"
 	"github.com/MSNZT/orderflow/internal/app/orders"
@@ -18,6 +19,8 @@ type Repository interface {
 	MarkWaitingForCapture(ctx context.Context, paymentID uuid.UUID) error
 	GetActiveByOrderID(ctx context.Context, orderID uuid.UUID) (*Payment, error)
 	GetByProviderPaymentID(ctx context.Context, providerPaymentID string) (*Payment, error)
+	CancelActiveByOrderID(ctx context.Context, orderID uuid.UUID, now time.Time) error
+	HasWaitingForCaptureByOrderID(ctx context.Context, orderID uuid.UUID) (bool, error)
 }
 
 type OrdersProvider interface {
