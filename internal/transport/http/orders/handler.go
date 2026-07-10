@@ -37,6 +37,7 @@ type orderBaseInfo struct {
 	Status          ordersapp.Status `json:"status"`
 	TotalPriceCents int64            `json:"total_price_cents"`
 	Currency        string           `json:"currency"`
+	ExpiresAt       time.Time        `json:"expires_at"`
 	CreatedAt       time.Time        `json:"created_at"`
 	UpdatedAt       time.Time        `json:"updated_at"`
 }
@@ -46,6 +47,7 @@ type createOrderResponse struct {
 	Status          ordersapp.Status `json:"status"`
 	TotalPriceCents int64            `json:"total_price_cents"`
 	Currency        string           `json:"currency"`
+	ExpiresAt       time.Time        `json:"expires_at"`
 	CreatedAt       time.Time        `json:"created_at"`
 }
 
@@ -107,6 +109,7 @@ func (h *Handler) CreateOrder(w http.ResponseWriter, r *http.Request) {
 		Status:          order.Status,
 		TotalPriceCents: order.TotalPriceCents,
 		Currency:        order.Currency,
+		ExpiresAt:       order.ExpiresAt,
 		CreatedAt:       order.CreatedAt,
 	}
 
@@ -301,6 +304,7 @@ func toOrdersResponse(orders []ordersapp.Order, page, limit int) *getOrdersRespo
 			Status:          o.Status,
 			TotalPriceCents: o.TotalPriceCents,
 			Currency:        o.Currency,
+			ExpiresAt:       o.ExpiresAt,
 			CreatedAt:       o.CreatedAt,
 			UpdatedAt:       o.UpdatedAt,
 		})
@@ -334,6 +338,7 @@ func toOrderResponse(orderDetails *ordersapp.OrderDetails) *orderResponse {
 			Status:          orderDetails.Status,
 			TotalPriceCents: orderDetails.TotalPriceCents,
 			Currency:        orderDetails.Currency,
+			ExpiresAt:       orderDetails.ExpiresAt,
 			CreatedAt:       orderDetails.CreatedAt,
 			UpdatedAt:       orderDetails.UpdatedAt,
 		},

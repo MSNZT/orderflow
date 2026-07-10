@@ -2,6 +2,7 @@ package inventory
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -175,6 +176,153 @@ func (r *Repository) DecreaseQuantity(ctx context.Context, productID uuid.UUID, 
 
 	if res.RowsAffected() == 0 {
 		return fmt.Errorf("%s: %w", op, inventoryapp.ErrInsufficientStock)
+	}
+
+	return nil
+}
+
+func (r *Repository) CommitReservedQuantities(ctx context.Context, reservedItems []inventoryapp.ReservedItem) error {
+	const op = "inventory.repository.CommitReservedQuantities"
+
+	query := `
+		WITH input AS (
+			SELECT product_id, quantity
+			FROM jsonb_to_recordset($1::jsonb) AS t(
+				product_id UUID, quantity INTEGER
+			)
+		),
+		existing AS (
+			SELECT pi.product_id
+			FROM product_inventory pi
+			JOIN input AS i ON i.product_id = pi.product_id
+		),
+		updated AS (
+			UPDATE product_inventory pi
+			SET quantity = pi.quantity - input.quantity,
+				reserved_quantity = pi.reserved_quantity - input.quantity,
+				updated_at = now()
+			FROM input
+			WHERE pi.product_id = input.product_id 
+				AND pi.reserved_quantity >= input.quantity
+				AND pi.quantity >= input.quantity
+			RETURNING pi.product_id
+		)
+		SELECT
+			(SELECT COUNT(*) FROM input) AS input_count,
+			(SELECT COUNT(*) FROM existing) AS existing_count,
+			(SELECT COUNT(*) FROM updated) AS updated_count;
+	`
+	if err := r.applyReservedInventoryUpdate(ctx, reservedItems, query, op); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (r *Repository) ReleaseReservedQuantities(ctx context.Context, reservedItems []inventoryapp.ReservedItem) error {
+	const op = "inventory.repository.ReleaseReservedQuantities"
+
+	query := `
+		WITH input AS (
+			SELECT product_id, quantity
+			FROM jsonb_to_recordset($1::jsonb) AS t(
+				product_id UUID, quantity INTEGER
+			)
+		),
+		existing AS (
+			SELECT pi.product_id
+			FROM product_inventory pi
+			JOIN input AS i ON i.product_id = pi.product_id
+		),
+		updated AS (
+			UPDATE product_inventory pi
+			SET reserved_quantity = pi.reserved_quantity - input.quantity,
+				updated_at = now()
+			FROM input
+			WHERE pi.product_id = input.product_id 
+				AND pi.reserved_quantity >= input.quantity
+			RETURNING pi.product_id
+		)
+		SELECT
+			(SELECT COUNT(*) FROM input) AS input_count,
+			(SELECT COUNT(*) FROM existing) AS existing_count,
+			(SELECT COUNT(*) FROM updated) AS updated_count;
+	`
+
+	if err := r.applyReservedInventoryUpdate(ctx, reservedItems, query, op); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (r *Repository) applyReservedInventoryUpdate(ctx context.Context, reservedItems []inventoryapp.ReservedItem, query string, op string) error {
+	if err := validateReservedItems(op, reservedItems); err != nil {
+		return err
+	}
+
+	var inputCount, existingCount, updatedCount int64
+
+	db := postgres.ExecutorFromContext(ctx, r.db)
+
+	jsonBytes, err := json.Marshal(reservedItems)
+	if err != nil {
+		return fmt.Errorf("%s: marshal reserved items: %w", op, err)
+	}
+
+	if err := db.QueryRow(ctx, query, string(jsonBytes)).Scan(
+		&inputCount, &existingCount, &updatedCount); err != nil {
+		return fmt.Errorf("%s: scan reserved inventory update result: %w", op, err)
+	}
+
+	itemsCount := int64(len(reservedItems))
+
+	if inputCount != itemsCount {
+		return fmt.Errorf("%s: unexpected input count: got=%d want=%d", op, inputCount, itemsCount)
+	}
+
+	if existingCount != itemsCount {
+		return fmt.Errorf(
+			"%s: %w: input_count=%d existing_count=%d",
+			op,
+			inventoryapp.ErrInventoryNotFound,
+			inputCount,
+			existingCount,
+		)
+	}
+
+	if updatedCount != itemsCount {
+		return fmt.Errorf(
+			"%s: %w: input_count=%d updated_count=%d",
+			op,
+			inventoryapp.ErrInsufficientStock,
+			inputCount,
+			updatedCount,
+		)
+	}
+	return nil
+}
+
+func validateReservedItems(op string, reservedItems []inventoryapp.ReservedItem) error {
+	if len(reservedItems) == 0 {
+		return fmt.Errorf("%s: %w", op, inventoryapp.ErrReservedItemsEmpty)
+	}
+
+	var uniqueIDs = make(map[uuid.UUID]struct{}, len(reservedItems))
+	for _, item := range reservedItems {
+		if item.ProductID == uuid.Nil {
+			return fmt.Errorf("%s: %w", op, inventoryapp.ErrProductIDIsNil)
+		}
+
+		if _, exists := uniqueIDs[item.ProductID]; exists {
+			return fmt.Errorf("%s: %w", op, inventoryapp.ErrDuplicateProductID)
+		}
+
+		if item.Quantity <= 0 {
+			return fmt.Errorf("%s: %w", op, inventoryapp.ErrInventoryQuantityInvalid)
+		}
+
+		uniqueIDs[item.ProductID] = struct{}{}
 	}
 
 	return nil

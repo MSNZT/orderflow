@@ -4,11 +4,14 @@ CREATE TABLE orders (
     status TEXT NOT NULL DEFAULT 'pending',
     total_price_cents BIGINT NOT NULL,
     currency TEXT NOT NULL,
+
+    expires_at TIMESTAMPTZ NOT NULL,
+
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
 
     CONSTRAINT chk_orders_total_price_cents CHECK (total_price_cents >= 0),
-    CONSTRAINT chk_orders_status CHECK (status IN ('pending', 'paid', 'cancelled')),
+    CONSTRAINT chk_orders_status CHECK (status IN ('pending', 'paid', 'canceled', 'expired')),
     CONSTRAINT chk_orders_currency CHECK (currency <> '')
 );
 
