@@ -35,14 +35,7 @@ func (p *Provider) CreatePayment(
 		return nil, mapProviderError(ctx, err)
 	}
 
-	if payment == nil {
-		return nil, fmt.Errorf(
-			"yookassa provider: client returned nil payment without error: %w",
-			payments.ErrProviderFailure,
-		)
-	}
-
-	status, err := mapPaymentStatus(payment.Status)
+	status, err := toDomainPaymentStatus(payment.Status)
 	if err != nil {
 		return nil, err
 	}
@@ -74,13 +67,6 @@ func (p *Provider) GetPayment(ctx context.Context, providerPaymentID string) (*p
 		return nil, mapProviderError(ctx, err)
 	}
 
-	if payment == nil {
-		return nil, fmt.Errorf(
-			"yookassa provider: client returned nil payment without error: %w",
-			payments.ErrProviderFailure,
-		)
-	}
-
 	providerPayment, err := mapProviderPayment(payment)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", op, err)
@@ -103,13 +89,6 @@ func (p *Provider) CapturePayment(ctx context.Context, input payments.CapturePay
 		return nil, mapProviderError(ctx, err)
 	}
 
-	if payment == nil {
-		return nil, fmt.Errorf(
-			"yookassa provider: client returned nil payment without error: %w",
-			payments.ErrProviderFailure,
-		)
-	}
-
 	providerPayment, err := mapProviderPayment(payment)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", op, err)
@@ -119,7 +98,7 @@ func (p *Provider) CapturePayment(ctx context.Context, input payments.CapturePay
 }
 
 func (p *Provider) CancelPayment(ctx context.Context, input payments.CancelPaymentInput) (*payments.ProviderPayment, error) {
-	const op = "yookassa.provider.CapturePayment"
+	const op = "yookassa.provider.CancelPayment"
 	req := CancelPaymentInput{
 		ProviderPaymentID: input.ProviderPaymentID,
 		IdempotencyKey:    input.IdempotencyKey,
@@ -130,13 +109,6 @@ func (p *Provider) CancelPayment(ctx context.Context, input payments.CancelPayme
 		return nil, mapProviderError(ctx, err)
 	}
 
-	if payment == nil {
-		return nil, fmt.Errorf(
-			"yookassa provider: client returned nil payment without error: %w",
-			payments.ErrProviderFailure,
-		)
-	}
-
 	providerPayment, err := mapProviderPayment(payment)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", op, err)
@@ -145,7 +117,7 @@ func (p *Provider) CancelPayment(ctx context.Context, input payments.CancelPayme
 	return providerPayment, nil
 }
 
-func mapPaymentStatus(status PaymentStatus) (payments.Status, error) {
+func toDomainPaymentStatus(status PaymentStatus) (payments.Status, error) {
 	switch status {
 	case StatusPending:
 		return payments.StatusPending, nil
@@ -161,7 +133,14 @@ func mapPaymentStatus(status PaymentStatus) (payments.Status, error) {
 }
 
 func mapProviderPayment(payment *Payment) (*payments.ProviderPayment, error) {
-	status, err := mapPaymentStatus(payment.Status)
+	if payment == nil {
+		return nil, fmt.Errorf(
+			"yookassa provider: client returned nil payment without error: %w",
+			payments.ErrProviderFailure,
+		)
+	}
+
+	status, err := toDomainPaymentStatus(payment.Status)
 	if err != nil {
 		return nil, fmt.Errorf("map payment status: %w", err)
 	}

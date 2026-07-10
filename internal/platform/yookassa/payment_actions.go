@@ -13,15 +13,17 @@ func (c *Client) CapturePayment(ctx context.Context, input CapturePaymentInput) 
 	if input.AmountCents <= 0 {
 		return nil, fmt.Errorf("%s: amount cents %w", op, ErrInvalidArgument)
 	}
-	if strings.TrimSpace(input.Currency) == "" {
+
+	currency := strings.TrimSpace(input.Currency)
+	if currency == "" {
 		return nil, fmt.Errorf("%s: currency %w", op, ErrInvalidArgument)
 	}
 
-	amountCents := formatAmount(input.AmountCents)
+	amountValue := formatAmount(input.AmountCents)
 	body := paymentActionRequest{
 		Amount: Money{
-			Value:    amountCents,
-			Currency: input.Currency,
+			Value:    amountValue,
+			Currency: currency,
 		},
 	}
 
@@ -48,5 +50,15 @@ func (c *Client) executePaymentAction(
 	}
 
 	path := fmt.Sprintf("%s/%s/%s", "payments", providerPaymentID, action)
-	return c.doPaymentRequest(ctx, http.MethodPost, path, idempotencyKey, body, op)
+	payment, err := c.doPaymentRequest(ctx, http.MethodPost, path, idempotencyKey, body, op)
+	if err != nil {
+		return nil, err
+	}
+
+	if payment.ID != providerPaymentID {
+		return nil, fmt.Errorf(
+			"mismatch payment id: expected %s, got: %s: %w", providerPaymentID, payment.ID, ErrInvalidResponse)
+	}
+
+	return payment, nil
 }

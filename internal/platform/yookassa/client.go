@@ -141,10 +141,6 @@ func (c *Client) doPaymentRequest(
 	if res.StatusCode != http.StatusOK {
 		cause := mapHTTPStatusError(res.StatusCode)
 
-		if res.StatusCode >= http.StatusInternalServerError && res.StatusCode <= 599 {
-			cause = ErrProviderUnavailable
-		}
-
 		apiError := APIError{
 			StatusCode: res.StatusCode,
 			Cause:      cause,

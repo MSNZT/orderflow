@@ -18,7 +18,7 @@ func (c *Client) CreatePayment(ctx context.Context, params CreatePaymentParams) 
 
 	paymentReq := c.buildCreatePaymentRequest(params)
 
-	path := fmt.Sprintf("%s", "payments")
+	path := "payments"
 	payment, err := c.doPaymentRequest(ctx, http.MethodPost, path, params.IdempotencyKey.String(), paymentReq, op)
 	if err != nil {
 		return nil, err
@@ -71,10 +71,6 @@ func (p *CreatePaymentParams) validate() error {
 }
 
 func validateCreatePaymentResponse(p *Payment, req *createPaymentRequest) error {
-	if err := validatePayment(p); err != nil {
-		return err
-	}
-
 	if p.Money.Value != req.Money.Value {
 		return fmt.Errorf(
 			"amount mismatch: expected %s, got %s: %w",

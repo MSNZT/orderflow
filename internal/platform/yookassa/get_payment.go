@@ -16,26 +16,15 @@ func (c *Client) GetPaymentByID(ctx context.Context, paymentID string) (*Payment
 	}
 
 	path := fmt.Sprintf("%s/%s", "payments", paymentID)
-	payment, err := c.doPaymentRequest(ctx, http.MethodPost, path, "", nil, op)
+	payment, err := c.doPaymentRequest(ctx, http.MethodGet, path, "", nil, op)
 	if err != nil {
 		return nil, err
 	}
 
-	if err := validateGetPaymentResponse(payment, paymentID); err != nil {
-		return nil, err
+	if payment.ID != paymentID {
+		return nil, fmt.Errorf(
+			"mismatch payment id: expected %s, got: %s: %w", paymentID, payment.ID, ErrInvalidResponse)
 	}
 
 	return payment, nil
-}
-
-func validateGetPaymentResponse(p *Payment, paymentID string) error {
-	if err := validatePayment(p); err != nil {
-		return err
-	}
-
-	if p.ID != paymentID {
-		return fmt.Errorf("mismatch payment id: expected %s, got: %s: %w", paymentID, p.ID, ErrInvalidResponse)
-	}
-
-	return nil
 }

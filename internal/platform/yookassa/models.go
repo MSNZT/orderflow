@@ -119,7 +119,7 @@ func validatePayment(p *Payment) error {
 		return fmt.Errorf("empty payment id: %w", ErrInvalidResponse)
 	}
 
-	if !p.Status.Valid(p.Status) {
+	if !p.Status.Valid() {
 		return fmt.Errorf("unknown payment status: %q: %w", p.Status, ErrInvalidResponse)
 	}
 
@@ -138,8 +138,8 @@ func validatePayment(p *Payment) error {
 	return nil
 }
 
-func (s PaymentStatus) Valid(status PaymentStatus) bool {
-	switch status {
+func (s PaymentStatus) Valid() bool {
+	switch s {
 	case StatusPending,
 		StatusSucceeded,
 		StatusCanceled,
