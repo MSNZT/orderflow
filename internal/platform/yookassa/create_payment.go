@@ -37,7 +37,7 @@ func (c Client) buildCreatePaymentRequest(params CreatePaymentParams) *createPay
 			Value:    formatAmount(params.AmountCents),
 			Currency: strings.TrimSpace(params.Currency),
 		},
-		Capture:     true,
+		Capture:     false,
 		Description: params.Description,
 		Metadata: Metadata{
 			OrderID:   params.OrderID.String(),
