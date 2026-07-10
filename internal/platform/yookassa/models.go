@@ -15,6 +15,29 @@ const (
 	StatusCanceled          PaymentStatus = "canceled"
 )
 
+type PaymentAction string
+
+const (
+	ActionCapture PaymentAction = "capture"
+	ActionCancel  PaymentAction = "cancel"
+)
+
+type CapturePaymentInput struct {
+	ProviderPaymentID string
+	IdempotencyKey    string
+	AmountCents       int64
+	Currency          string
+}
+
+type CancelPaymentInput struct {
+	ProviderPaymentID string
+	IdempotencyKey    string
+}
+
+type paymentActionRequest struct {
+	Amount Money `json:"amount"`
+}
+
 type apiErrorResponse struct {
 	ID          string `json:"id"`
 	Type        string `json:"type"`

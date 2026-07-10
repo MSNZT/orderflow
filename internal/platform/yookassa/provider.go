@@ -105,6 +105,38 @@ func (p *Provider) GetPayment(ctx context.Context, providerPaymentID string) (*p
 	}, nil
 }
 
+func (p *Provider) CapturePayment(ctx context.Context, input payments.CapturePaymentInput) (*Payment, error) {
+	const op = "yookassa.provider.CapturePayment"
+	req := CapturePaymentInput{
+		ProviderPaymentID: input.ProviderPaymentID,
+		IdempotencyKey:    input.IdempotencyKey,
+		AmountCents:       input.AmountCents,
+		Currency:          input.Currency,
+	}
+
+	payment, err := p.client.CapturePayment(ctx, req)
+	if err != nil {
+		return nil, fmt.Errorf("%s: capture payment: %w", op, err)
+	}
+
+	return payment, nil
+}
+
+func (p *Provider) CancelPayment(ctx context.Context, input payments.CancelPaymentInput) (*Payment, error) {
+	const op = "yookassa.provider.CapturePayment"
+	req := CancelPaymentInput{
+		ProviderPaymentID: input.ProviderPaymentID,
+		IdempotencyKey:    input.IdempotencyKey,
+	}
+
+	payment, err := p.client.CancelPayment(ctx, req)
+	if err != nil {
+		return nil, fmt.Errorf("%s: cancel payment: %w", op, err)
+	}
+
+	return payment, nil
+}
+
 func mapPaymentStatus(status PaymentStatus) (payments.Status, error) {
 	switch status {
 	case StatusPending:

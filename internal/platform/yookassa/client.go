@@ -218,6 +218,106 @@ func (c *Client) GetPaymentByID(ctx context.Context, paymentID string) (*Payment
 	return &payment, nil
 }
 
+func (c *Client) CapturePayment(ctx context.Context, input CapturePaymentInput) (*Payment, error) {
+	const op = "yookassa.client.CapturePayment"
+
+	if input.AmountCents <= 0 {
+		return nil, fmt.Errorf("%s: amount cents %w", op, ErrInvalidArgument)
+	}
+	if strings.TrimSpace(input.Currency) == "" {
+		return nil, fmt.Errorf("%s: currency %w", op, ErrInvalidArgument)
+	}
+
+	amountCents := formatAmount(input.AmountCents)
+	body := paymentActionRequest{
+		Amount: Money{
+			Value:    amountCents,
+			Currency: input.Currency,
+		},
+	}
+
+	return c.executePaymentAction(ctx, input.ProviderPaymentID, input.IdempotencyKey, body, ActionCapture, op)
+}
+
+func (c *Client) CancelPayment(ctx context.Context, input CancelPaymentInput) (*Payment, error) {
+	const op = "yookassa.client.CancelPayment"
+
+	return c.executePaymentAction(ctx, input.ProviderPaymentID, input.IdempotencyKey, nil, ActionCancel, op)
+}
+
+func (c *Client) executePaymentAction(
+	ctx context.Context, providerPaymentID string, idempotencyKey string, body any,
+	action PaymentAction, op string) (*Payment, error) {
+	providerPaymentID = strings.TrimSpace(providerPaymentID)
+	if providerPaymentID == "" {
+		return nil, fmt.Errorf("%s: provider payment id: %w", op, ErrInvalidArgument)
+	}
+
+	idempotencyKey = strings.TrimSpace(idempotencyKey)
+	if idempotencyKey == "" {
+		return nil, fmt.Errorf("%s: idempotency key: %w", op, ErrInvalidArgument)
+	}
+
+	fullURL, err := url.JoinPath(c.apiURL, "payments", providerPaymentID, string(action))
+	if err != nil {
+		return nil, fmt.Errorf("%s: failed to join url path: %w", op, err)
+	}
+
+	jsonData, err := json.Marshal(body)
+	if err != nil {
+		return nil, fmt.Errorf("%s: failed to json encoding: %w", op, err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, fullURL, bytes.NewReader(jsonData))
+	req.SetBasicAuth(c.shopID, c.secretKey)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Idempotence-Key", idempotencyKey)
+
+	res, err := c.httpClient.Do(req)
+	if err != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return nil, fmt.Errorf("%s: send request: %w", op, ctxErr)
+		}
+		return nil, fmt.Errorf("%s: %w: %w", op, ErrProviderUnavailable, err)
+	}
+
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusOK {
+		cause := mapStatusCode(res.StatusCode)
+
+		if res.StatusCode >= http.StatusInternalServerError && res.StatusCode <= 599 {
+			cause = ErrProviderUnavailable
+		}
+
+		apiError := APIError{
+			StatusCode: res.StatusCode,
+			Cause:      cause,
+		}
+
+		var errResponse apiErrorResponse
+		if err := json.NewDecoder(res.Body).Decode(&errResponse); err == nil {
+			apiError.ID = errResponse.ID
+			apiError.Code = errResponse.Code
+			apiError.Description = errResponse.Description
+			apiError.Parameter = errResponse.Parameter
+		}
+
+		return nil, fmt.Errorf("%s: %w", op, &apiError)
+	}
+
+	var payment Payment
+	if err := json.NewDecoder(res.Body).Decode(&payment); err != nil {
+		return nil, fmt.Errorf("%s: decode payment response: %w: %w", op, ErrInvalidResponse, err)
+	}
+
+	if err := validatePayment(&payment); err != nil {
+		return nil, fmt.Errorf("%s: validate payment response: %w", op, err)
+	}
+
+	return &payment, nil
+}
+
 func (c Client) buildCreatePaymentRequest(params CreatePaymentParams) *createPaymentRequest {
 	paymentReq := createPaymentRequest{
 		Money: Money{
