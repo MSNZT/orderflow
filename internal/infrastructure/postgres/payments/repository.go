@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	paymentsapp "github.com/MSNZT/orderflow/internal/app/payments"
 	"github.com/MSNZT/orderflow/internal/infrastructure/postgres"
@@ -117,6 +118,58 @@ func (r *Repository) GetActiveByOrderID(ctx context.Context, orderID uuid.UUID) 
 	}
 
 	return &p, nil
+}
+
+func (r *Repository) CancelActiveByOrderID(ctx context.Context, orderID uuid.UUID, now time.Time) error {
+	const op = "payments.repository.CancelActiveByOrderID"
+
+	query := `
+		UPDATE payments
+		SET status = 'canceled',
+			updated_at = $2,
+			canceled_at = $2
+		WHERE order_id = $1 
+			AND status IN ('creating', 'pending');
+	`
+
+	db := postgres.ExecutorFromContext(ctx, r.db)
+
+	_, err := db.Exec(ctx, query, orderID, now)
+	if err != nil {
+		return fmt.Errorf("%s: failed to cancel active payment %w", op, err)
+	}
+
+	return nil
+}
+
+func (r *Repository) HasWaitingForCaptureByOrderID(ctx context.Context, orderID uuid.UUID) (bool, error) {
+	const op = "payments.repository.HasWaitingForCaptureByOrderID"
+
+	if orderID == uuid.Nil {
+		return false, fmt.Errorf("%s: %w", op, paymentsapp.ErrOrderIDIsNil)
+	}
+
+	query := `
+		SELECT EXISTS (
+			SELECT 1
+			FROM payments
+			WHERE order_id = $1
+			  AND status = 'waiting_for_capture'
+		)
+	`
+
+	db := postgres.ExecutorFromContext(ctx, r.db)
+
+	var exists bool
+	if err := db.QueryRow(ctx, query, orderID).Scan(&exists); err != nil {
+		return false, fmt.Errorf(
+			"%s: check waiting for capture payment: %w",
+			op,
+			err,
+		)
+	}
+
+	return exists, nil
 }
 
 func (r *Repository) GetByProviderPaymentID(ctx context.Context, providerPaymentID string) (*paymentsapp.Payment, error) {
@@ -307,6 +360,57 @@ func (r *Repository) MarkSucceeded(ctx context.Context, paymentID uuid.UUID) err
 		string(paymentsapp.StatusWaitingForCapture),
 	).Scan(&paymentExisting, &paymentUpdated); err != nil {
 		return fmt.Errorf("%s: failed to mark payment succeeded: %w", op, err)
+	}
+
+	if !paymentExisting {
+		return fmt.Errorf("%s: %w", op, paymentsapp.ErrPaymentNotFound)
+	}
+
+	if !paymentUpdated {
+		return fmt.Errorf("%s: %w", op, paymentsapp.ErrPaymentStatusTransitionInvalid)
+	}
+
+	return nil
+}
+
+func (r *Repository) MarkWaitingForCapture(ctx context.Context, paymentID uuid.UUID) error {
+	const op = "payments.repository.MarkWaitingForCapture"
+
+	if paymentID == uuid.Nil {
+		return fmt.Errorf("%s: %w", op, paymentsapp.ErrPaymentIDIsNil)
+	}
+
+	query := `
+		WITH existing AS (
+			SELECT id
+			FROM payments
+			WHERE id = $1
+		),
+		updated AS (
+			UPDATE payments
+			SET status = $2,
+				updated_at = now()
+			WHERE id = $1
+			  AND status IN ($3,$4)
+			RETURNING id
+		)
+		SELECT
+			EXISTS (SELECT 1 FROM existing) AS payment_existing,
+			EXISTS (SELECT 1 FROM updated) AS payment_updated
+	`
+
+	db := postgres.ExecutorFromContext(ctx, r.db)
+
+	var paymentExisting, paymentUpdated bool
+	if err := db.QueryRow(
+		ctx,
+		query,
+		paymentID,
+		string(paymentsapp.StatusWaitingForCapture),
+		string(paymentsapp.StatusCreating),
+		string(paymentsapp.StatusPending),
+	).Scan(&paymentExisting, &paymentUpdated); err != nil {
+		return fmt.Errorf("%s: failed to mark payment waiting for capture: %w", op, err)
 	}
 
 	if !paymentExisting {

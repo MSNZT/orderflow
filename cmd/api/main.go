@@ -10,6 +10,7 @@ import (
 
 	authapp "github.com/MSNZT/orderflow/internal/app/auth"
 	cartapp "github.com/MSNZT/orderflow/internal/app/cart"
+	"github.com/MSNZT/orderflow/internal/app/jobs"
 	ordersapp "github.com/MSNZT/orderflow/internal/app/orders"
 	paymentsapp "github.com/MSNZT/orderflow/internal/app/payments"
 	productsapp "github.com/MSNZT/orderflow/internal/app/products"
@@ -26,6 +27,7 @@ import (
 	"github.com/MSNZT/orderflow/internal/infrastructure/postgres/sessions"
 	usersrepo "github.com/MSNZT/orderflow/internal/infrastructure/postgres/users"
 	"github.com/MSNZT/orderflow/internal/infrastructure/token"
+	"github.com/MSNZT/orderflow/internal/platform/worker"
 	"github.com/MSNZT/orderflow/internal/platform/yookassa"
 	authhttp "github.com/MSNZT/orderflow/internal/transport/http/auth"
 	carthttp "github.com/MSNZT/orderflow/internal/transport/http/cart"
@@ -84,32 +86,35 @@ func main() {
 	}
 
 	sessionsRepository := sessions.NewRepository(dbPool)
-	authService := authapp.NewService(usersService, tokenManager, sessionsRepository, cfg.JWT.RefreshTTL)
-	authHandler := authhttp.NewHandler(log, usersService, authService)
-
 	productsRepository := productsrepo.NewRepository(dbPool)
 	inventoryRepository := inventory.NewRepository(dbPool)
-	productsService := productsapp.NewService(productsRepository, inventoryRepository, txManager)
-	productsHandler := productshttp.NewHandler(log, productsService)
-
 	cartRepository := cartrepo.NewRepository(dbPool)
-	cartService := cartapp.NewService(cartRepository, txManager, productsService)
-	cartHandler := carthttp.NewHandler(log, cartService)
-
 	orderRepository := ordersrepo.NewRepository(dbPool)
-	orderService := ordersapp.NewService(
-		orderRepository, inventoryRepository, cartService, txManager, cfg.Orders.PaymentTTL,
-	)
-	orderHandler := ordershttp.NewHandler(log, orderService)
-
 	paymentRepository := paymentsrepo.NewRepository(dbPool)
+
 	paymentProvider := yookassa.NewProvider(yookassaClient)
+
+	authService := authapp.NewService(usersService, tokenManager, sessionsRepository, cfg.JWT.RefreshTTL)
+	productsService := productsapp.NewService(productsRepository, inventoryRepository, txManager)
+	cartService := cartapp.NewService(cartRepository, txManager, productsService)
+	orderService := ordersapp.NewService(
+		orderRepository, inventoryRepository, cartService, paymentRepository, txManager, cfg.Orders.PaymentTTL,
+	)
 	paymentService := paymentsapp.NewService(
 		paymentRepository, orderRepository, paymentProvider, inventoryRepository, txManager,
 	)
+
+	authHandler := authhttp.NewHandler(log, usersService, authService)
+	productsHandler := productshttp.NewHandler(log, productsService)
+	cartHandler := carthttp.NewHandler(log, cartService)
+	orderHandler := ordershttp.NewHandler(log, orderService)
 	paymentHandler := paymentshttp.NewHandler(log, paymentService)
 
 	webhookHandler := webhooks.NewHandler(log, paymentService, paymentProvider)
+
+	workers := worker.New(log)
+	jobs.RegisterOrderExpiration(workers, orderService, cfg.Orders, log)
+	workers.StartAll(ctx)
 
 	router := router.NewRouter(log, tokenManager, router.RouterDependencies{
 		AuthHandler:     authHandler,

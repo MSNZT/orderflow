@@ -1,6 +1,8 @@
 package yookassa
 
 import (
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -14,6 +16,29 @@ const (
 	StatusSucceeded         PaymentStatus = "succeeded"
 	StatusCanceled          PaymentStatus = "canceled"
 )
+
+type PaymentAction string
+
+const (
+	ActionCapture PaymentAction = "capture"
+	ActionCancel  PaymentAction = "cancel"
+)
+
+type CapturePaymentInput struct {
+	ProviderPaymentID string
+	IdempotencyKey    string
+	AmountCents       int64
+	Currency          string
+}
+
+type CancelPaymentInput struct {
+	ProviderPaymentID string
+	IdempotencyKey    string
+}
+
+type paymentActionRequest struct {
+	Amount Money `json:"amount"`
+}
 
 type apiErrorResponse struct {
 	ID          string `json:"id"`
@@ -83,4 +108,43 @@ type Payment struct {
 	Refundable          bool                 `json:"refundable"`
 	Test                bool                 `json:"test"`
 	CancellationDetails *CancellationDetails `json:"cancellation_details"`
+}
+
+func validatePayment(p *Payment) error {
+	if p == nil {
+		return fmt.Errorf("nil payment response: %w", ErrInvalidResponse)
+	}
+
+	if strings.TrimSpace(p.ID) == "" {
+		return fmt.Errorf("empty payment id: %w", ErrInvalidResponse)
+	}
+
+	if !p.Status.Valid() {
+		return fmt.Errorf("unknown payment status: %q: %w", p.Status, ErrInvalidResponse)
+	}
+
+	if strings.TrimSpace(p.Money.Currency) == "" {
+		return fmt.Errorf("empty payment currency: %s: %w", p.Money.Currency, ErrInvalidResponse)
+	}
+
+	if strings.TrimSpace(p.Money.Value) == "" {
+		return fmt.Errorf("empty payment money value: %s: %w", p.Money.Value, ErrInvalidResponse)
+	}
+
+	if p.CreatedAt.IsZero() {
+		return fmt.Errorf("empty payment created_at: %w", ErrInvalidResponse)
+	}
+
+	return nil
+}
+
+func (s PaymentStatus) Valid() bool {
+	switch s {
+	case StatusPending,
+		StatusSucceeded,
+		StatusCanceled,
+		StatusWaitingForCapture:
+		return true
+	}
+	return false
 }

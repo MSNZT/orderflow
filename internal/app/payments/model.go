@@ -41,6 +41,18 @@ type ProviderCreateParams struct {
 	IdempotencyKey uuid.UUID
 }
 
+type CapturePaymentInput struct {
+	ProviderPaymentID string
+	IdempotencyKey    string
+	AmountCents       int64
+	Currency          string
+}
+
+type CancelPaymentInput struct {
+	ProviderPaymentID string
+	IdempotencyKey    string
+}
+
 type Payment struct {
 	ID                 uuid.UUID
 	OrderID            uuid.UUID

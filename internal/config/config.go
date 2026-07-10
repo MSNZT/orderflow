@@ -40,7 +40,9 @@ type JWTConfig struct {
 }
 
 type OrdersConfig struct {
-	PaymentTTL time.Duration `yaml:"payment_ttl" env:"PAYMENT_TTL"`
+	PaymentTTL       time.Duration `yaml:"payment_ttl" env:"PAYMENT_TTL"`
+	ExpireInterval   time.Duration `yaml:"expire_interval" env:"EXPIRE_INTERVAL"`
+	ExpireBatchLimit int           `yaml:"expire_batch_limit" env:"EXPIRE_BATCH_LIMIT"`
 }
 
 type YookassaConfig struct {
@@ -55,10 +57,6 @@ func Load() (*Config, error) {
 	CONFIG_PATH := os.Getenv("CONFIG_PATH")
 	if CONFIG_PATH == "" {
 		return nil, fmt.Errorf("CONFIG_PATH is not set")
-	}
-
-	if _, err := os.Stat(CONFIG_PATH); err != nil {
-		return nil, fmt.Errorf("config file doesn't exist: %v", CONFIG_PATH)
 	}
 
 	var cfg Config
@@ -135,6 +133,14 @@ func (c *Config) validate() error {
 		return fmt.Errorf("orders payment ttl must be greater than 0")
 	}
 
+	if c.Orders.ExpireInterval <= 0 {
+		return fmt.Errorf("orders expire interval must be greater than 0")
+	}
+
+	if c.Orders.ExpireBatchLimit < 100 {
+		return fmt.Errorf("orders expire batch limit must be greater than or equal to 100")
+	}
+
 	if err := c.Yookassa.validate(); err != nil {
 		return err
 	}
@@ -142,7 +148,7 @@ func (c *Config) validate() error {
 	return nil
 }
 
-func (c YookassaConfig) validate() error {
+func (c *YookassaConfig) validate() error {
 	if strings.TrimSpace(c.APIURL) == "" {
 		return fmt.Errorf("yookassa api url is required")
 	}

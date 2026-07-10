@@ -19,6 +19,8 @@ jwt:
 
 orders:
   payment_ttl: 5m
+  expire_interval: 1m
+  expire_batch_limit: 100
 
 yookassa:
   api_url: "https://api.yookassa.ru/v3"

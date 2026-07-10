@@ -1,5 +1,5 @@
 http:
-  addr: "0.0.0.0:8080"
+  addr: ":8080"
   read_timeout: 10s
   read_header_timeout: 5s
   write_timeout: 10s
@@ -19,10 +19,12 @@ jwt:
 
 orders:
   payment_ttl: 5m
+  expire_interval: 1m
+  expire_batch_limit: 100
 
 yookassa:
   api_url: "https://api.yookassa.ru/v3"
   shop_id: ""
   secret_key: ""
-  return_url: ""
+  return_url: "https://corehaven.ru/redirect"
   request_timeout: 10s
