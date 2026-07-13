@@ -93,7 +93,16 @@ func main() {
 	orderRepository := ordersrepo.NewRepository(dbPool)
 	paymentRepository := paymentsrepo.NewRepository(dbPool)
 
-	paymentProvider := yookassa.NewProvider(yookassaClient)
+	metricsRegistry := metricsinfra.NewRegistry()
+	httpMetrics := metricsinfra.NewHTTPMetrics(metricsRegistry)
+	metricsHandler := metricsinfra.NewHandler(metricsRegistry)
+	jobMetrics := metricsinfra.NewJobsMetrics(metricsRegistry)
+	paymentsMetrics := metricsinfra.NewPaymentMetrics(metricsRegistry)
+
+	paymentProvider := metricsinfra.NewPaymentProviderDecorator(
+		yookassa.NewProvider(yookassaClient),
+		paymentsMetrics,
+	)
 
 	authService := authapp.NewService(usersService, tokenManager, sessionsRepository, cfg.JWT.RefreshTTL)
 	productsService := productsapp.NewService(productsRepository, inventoryRepository, txManager)
@@ -112,11 +121,6 @@ func main() {
 	paymentHandler := paymentshttp.NewHandler(log, paymentService)
 
 	webhookHandler := webhooks.NewHandler(log, paymentService, paymentProvider)
-
-	metricsRegistry := metricsinfra.NewRegistry()
-	httpMetrics := metricsinfra.NewHTTPMetrics(metricsRegistry)
-	metricsHandler := metricsinfra.NewHandler(metricsRegistry)
-	jobMetrics := metricsinfra.NewJobsMetrics(metricsRegistry)
 
 	workers := worker.New(log, jobMetrics)
 	jobs.RegisterOrderExpiration(workers, orderService, cfg.Orders, log)
