@@ -17,6 +17,7 @@ import (
 	usersapp "github.com/MSNZT/orderflow/internal/app/users"
 	"github.com/MSNZT/orderflow/internal/config"
 	"github.com/MSNZT/orderflow/internal/infrastructure/logger"
+	metricsinfra "github.com/MSNZT/orderflow/internal/infrastructure/metrics"
 	"github.com/MSNZT/orderflow/internal/infrastructure/password"
 	"github.com/MSNZT/orderflow/internal/infrastructure/postgres"
 	cartrepo "github.com/MSNZT/orderflow/internal/infrastructure/postgres/cart"
@@ -116,6 +117,9 @@ func main() {
 	jobs.RegisterOrderExpiration(workers, orderService, cfg.Orders, log)
 	workers.StartAll(ctx)
 
+	metricsRegistry := metricsinfra.NewRegistry()
+	metricsHandler := metricsinfra.NewHandler(metricsRegistry)
+
 	router := router.NewRouter(log, tokenManager, router.RouterDependencies{
 		AuthHandler:     authHandler,
 		ProductsHandler: productsHandler,
@@ -124,6 +128,7 @@ func main() {
 		OrderHandler:    orderHandler,
 		PaymentHandler:  paymentHandler,
 		WebhookHandler:  webhookHandler,
+		MetricsHandler:  metricsHandler,
 	})
 
 	srv := server.New(cfg, log, router)

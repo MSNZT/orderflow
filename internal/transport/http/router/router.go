@@ -25,6 +25,7 @@ type RouterDependencies struct {
 	OrderHandler    *orders.Handler
 	PaymentHandler  *payments.Handler
 	WebhookHandler  *webhooks.Handler
+	MetricsHandler  http.Handler
 }
 
 func NewRouter(log *slog.Logger, tokenParser httpmw.TokenParser, deps RouterDependencies) http.Handler {
@@ -36,6 +37,7 @@ func NewRouter(log *slog.Logger, tokenParser httpmw.TokenParser, deps RouterDepe
 
 	r.Get("/health/live", deps.HealthHandler.Live)
 	r.Get("/health/ready", deps.HealthHandler.Ready)
+	r.Method(http.MethodGet, "/metrics", deps.MetricsHandler)
 
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Post("/auth/register", deps.AuthHandler.Register)
