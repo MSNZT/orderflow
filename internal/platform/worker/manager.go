@@ -21,19 +21,31 @@ type JobConfig struct {
 	RunOnStart bool
 }
 
-type Manager struct {
-	log        *slog.Logger
-	jobs       map[string]Job
-	jobConfigs map[string]JobConfig
-	cancels    map[string]context.CancelFunc
+type MetricsRecorder interface {
+	JobStarted(name string)
+
+	JobFinished(
+		name string,
+		duration time.Duration,
+		err error,
+	)
 }
 
-func New(log *slog.Logger) *Manager {
+type Manager struct {
+	log             *slog.Logger
+	jobs            map[string]Job
+	jobConfigs      map[string]JobConfig
+	cancels         map[string]context.CancelFunc
+	metricsRecorder MetricsRecorder
+}
+
+func New(log *slog.Logger, metricsRecorder MetricsRecorder) *Manager {
 	return &Manager{
-		log:        log,
-		jobs:       make(map[string]Job),
-		jobConfigs: make(map[string]JobConfig),
-		cancels:    make(map[string]context.CancelFunc),
+		log:             log,
+		jobs:            make(map[string]Job),
+		jobConfigs:      make(map[string]JobConfig),
+		cancels:         make(map[string]context.CancelFunc),
+		metricsRecorder: metricsRecorder,
 	}
 }
 
@@ -87,6 +99,7 @@ func (m *Manager) runPeriodic(ctx context.Context, name string, job Job, cfg Job
 func (m *Manager) executeJob(ctx context.Context, name string, job Job) {
 	start := time.Now().UTC()
 	m.log.Info("executing job", "name", name)
+	m.metricsRecorder.JobStarted(name)
 
 	if err := job.Run(ctx); err != nil {
 		m.log.Error("job failed",
@@ -94,6 +107,7 @@ func (m *Manager) executeJob(ctx context.Context, name string, job Job) {
 			"error", err,
 			"duration", time.Since(start),
 		)
+		m.metricsRecorder.JobFinished(name, time.Since(start), err)
 		return
 	}
 
@@ -101,4 +115,5 @@ func (m *Manager) executeJob(ctx context.Context, name string, job Job) {
 		"name", name,
 		"duration", time.Since(start),
 	)
+	m.metricsRecorder.JobFinished(name, time.Since(start), nil)
 }

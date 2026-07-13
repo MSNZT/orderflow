@@ -113,13 +113,14 @@ func main() {
 
 	webhookHandler := webhooks.NewHandler(log, paymentService, paymentProvider)
 
-	workers := worker.New(log)
-	jobs.RegisterOrderExpiration(workers, orderService, cfg.Orders, log)
-	workers.StartAll(ctx)
-
 	metricsRegistry := metricsinfra.NewRegistry()
 	httpMetrics := metricsinfra.NewHTTPMetrics(metricsRegistry)
 	metricsHandler := metricsinfra.NewHandler(metricsRegistry)
+	jobMetrics := metricsinfra.NewJobsMetrics(metricsRegistry)
+
+	workers := worker.New(log, jobMetrics)
+	jobs.RegisterOrderExpiration(workers, orderService, cfg.Orders, log)
+	workers.StartAll(ctx)
 
 	router := router.NewRouter(log, tokenManager, router.RouterDependencies{
 		AuthHandler:            authHandler,
