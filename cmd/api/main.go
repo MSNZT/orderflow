@@ -118,17 +118,19 @@ func main() {
 	workers.StartAll(ctx)
 
 	metricsRegistry := metricsinfra.NewRegistry()
+	httpMetrics := metricsinfra.NewHTTPMetrics(metricsRegistry)
 	metricsHandler := metricsinfra.NewHandler(metricsRegistry)
 
 	router := router.NewRouter(log, tokenManager, router.RouterDependencies{
-		AuthHandler:     authHandler,
-		ProductsHandler: productsHandler,
-		CartHandler:     cartHandler,
-		HealthHandler:   healthHandler,
-		OrderHandler:    orderHandler,
-		PaymentHandler:  paymentHandler,
-		WebhookHandler:  webhookHandler,
-		MetricsHandler:  metricsHandler,
+		AuthHandler:            authHandler,
+		ProductsHandler:        productsHandler,
+		CartHandler:            cartHandler,
+		HealthHandler:          healthHandler,
+		OrderHandler:           orderHandler,
+		PaymentHandler:         paymentHandler,
+		WebhookHandler:         webhookHandler,
+		MetricsHandler:         metricsHandler,
+		RequestMetricsRecorder: httpMetrics,
 	})
 
 	srv := server.New(cfg, log, router)
