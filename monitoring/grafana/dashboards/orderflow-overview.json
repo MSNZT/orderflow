@@ -2,21 +2,21 @@
   "apiVersion": "dashboard.grafana.app/v2",
   "kind": "Dashboard",
   "metadata": {
-    "name": "orx6r8r",
+    "name": "orcsg8b",
     "namespace": "default",
-    "uid": "2be64c7e-0bb3-456c-ab16-248789a273f4",
-    "resourceVersion": "1783986603171010",
-    "generation": 9,
-    "creationTimestamp": "2026-07-13T23:14:41Z",
+    "uid": "18761602-314a-41cb-8fb6-3e9487039b2a",
+    "resourceVersion": "1784037293176008",
+    "generation": 4,
+    "creationTimestamp": "2026-07-14T13:44:14Z",
     "labels": {
-      "grafana.app/deprecatedInternalID": "648128293433344"
+      "grafana.app/deprecatedInternalID": "866960264962048"
     },
     "annotations": {
       "grafana.app/createdBy": "user:ffs0069g7mcjke",
       "grafana.app/folder": "",
       "grafana.app/saved-from-ui": "Grafana v13.0.3 (3ca0684c7c)",
       "grafana.app/updatedBy": "user:ffs0069g7mcjke",
-      "grafana.app/updatedTimestamp": "2026-07-13T23:50:03Z"
+      "grafana.app/updatedTimestamp": "2026-07-14T13:54:53Z"
     }
   },
   "spec": {
@@ -494,6 +494,157 @@
             }
           }
         }
+      },
+      "panel-6": {
+        "kind": "Panel",
+        "spec": {
+          "id": 6,
+          "title": "Recent API errors",
+          "description": "",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "loki",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "loki"
+                      },
+                      "spec": {
+                        "direction": "backward",
+                        "editorMode": "code",
+                        "expr": "{service=\"api\"}\n| json\n| level=\"ERROR\"\n| line_format \"{{.msg}} | error={{.error}} | request_id={{.request_id}}\"",
+                        "queryType": "range"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "logs",
+            "version": "13.0.3",
+            "spec": {
+              "options": {
+                "dedupStrategy": "none",
+                "enableInfiniteScrolling": false,
+                "enableLogDetails": true,
+                "prettifyLogMessage": false,
+                "showControls": false,
+                "showFieldSelector": false,
+                "showLevel": true,
+                "showTime": false,
+                "sortOrder": "Descending",
+                "timestampResolution": "ms",
+                "unwrappedColumns": false,
+                "wrapLogMessage": true
+              },
+              "fieldConfig": {
+                "defaults": {},
+                "overrides": []
+              }
+            }
+          }
+        }
+      },
+      "panel-7": {
+          "kind": "Panel",
+          "spec": {
+            "id": 7,
+            "title": "Observability components",
+            "description": "",
+            "links": [],
+            "data": {
+              "kind": "QueryGroup",
+              "spec": {
+                "queries": [
+                  {
+                    "kind": "PanelQuery",
+                    "spec": {
+                      "query": {
+                        "kind": "DataQuery",
+                        "version": "v0",
+                        "group": "prometheus",
+                        "datasource": {
+                          "name": "prometheus"
+                        },
+                        "spec": {
+                          "editorMode": "code",
+                          "expr": "up{\n  job=~\"orderflow-api|loki|alloy|prometheus\"\n}",
+                          "legendFormat": "__auto",
+                          "range": true
+                        }
+                      },
+                      "refId": "A",
+                      "hidden": false
+                    }
+                  }
+                ],
+                "transformations": [],
+                "queryOptions": {}
+              }
+            },
+            "vizConfig": {
+              "kind": "VizConfig",
+              "group": "stat",
+              "version": "13.0.3",
+              "spec": {
+                "options": {
+                  "reduceOptions": {
+                    "values": false,
+                    "calcs": [
+                      "lastNotNull"
+                    ],
+                    "fields": ""
+                  },
+                  "orientation": "auto",
+                  "textMode": "auto",
+                  "wideLayout": true,
+                  "colorMode": "value",
+                  "graphMode": "area",
+                  "justifyMode": "auto",
+                  "showPercentChange": false,
+                  "percentChangeColorMode": "standard"
+                },
+                "fieldConfig": {
+                  "defaults": {
+                    "thresholds": {
+                      "mode": "absolute",
+                      "steps": [
+                        {
+                          "color": "red",
+                          "value": null
+                        },
+                        {
+                          "value": 1,
+                          "color": "green"
+                        }
+                      ]
+                    },
+                    "color": {
+                      "mode": "thresholds"
+                    },
+                    "min": 0,
+                    "max": 1,
+                    "unit": "short"
+                  },
+                  "overrides": []
+                }
+              }
+            }
+          }
       }
     },
     "layout": {
@@ -506,7 +657,7 @@
               "x": 0,
               "y": 0,
               "width": 11,
-              "height": 10,
+              "height": 6,
               "element": {
                 "kind": "ElementReference",
                 "name": "panel-1"
@@ -519,7 +670,7 @@
               "x": 11,
               "y": 0,
               "width": 13,
-              "height": 10,
+              "height": 6,
               "element": {
                 "kind": "ElementReference",
                 "name": "panel-2"
@@ -530,7 +681,7 @@
             "kind": "GridLayoutItem",
             "spec": {
               "x": 0,
-              "y": 10,
+              "y": 6,
               "width": 11,
               "height": 8,
               "element": {
@@ -543,12 +694,38 @@
             "kind": "GridLayoutItem",
             "spec": {
               "x": 11,
-              "y": 10,
+              "y": 6,
               "width": 13,
               "height": 8,
               "element": {
                 "kind": "ElementReference",
                 "name": "panel-4"
+              }
+            }
+          },
+          {
+            "kind": "GridLayoutItem",
+            "spec": {
+              "x": 0,
+              "y": 14,
+              "width": 24,
+              "height": 9,
+              "element": {
+                "kind": "ElementReference",
+                "name": "panel-6"
+              }
+            }
+          },
+          {
+            "kind": "GridLayoutItem",
+            "spec": {
+              "x": 0,
+              "y": 23,
+              "width": 24,
+              "height": 9,
+              "element": {
+                "kind": "ElementReference",
+                "name": "panel-7"
               }
             }
           }
@@ -579,7 +756,7 @@
       "hideTimepicker": false,
       "fiscalYearStartMonth": 0
     },
-    "title": "New dashboard",
+    "title": "OrderFlow Overview",
     "variables": [],
     "preferences": {
       "layout": {

@@ -87,3 +87,87 @@ groups:
           isPaused: false
           notification_settings:
             receiver: Local webhook
+    - orgId: 1
+      name: orderflow-health
+      folder: OrderFlow
+      interval: 30s
+      rules:
+      - uid: efs3jl2a2wikgf
+        title: OrderFlow logging pipeline unavailable
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: prometheus
+            model:
+              editorMode: code
+              expr: up{job=~"loki|alloy"}
+              instant: true
+              intervalMs: 1000
+              legendFormat: __auto
+              maxDataPoints: 43200
+              range: false
+              refId: A
+          - refId: C
+            queryType: expression
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params: [1]
+                    type: lt
+                  operator:
+                    type: and
+                  query:
+                    params: [C]
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: B
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: C
+              type: threshold
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params: [0, 0]
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params: []
+                  reducer:
+                    params: []
+                    type: avg
+                  type: query
+              datasource:
+                name: Expression
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              reducer: last
+              refId: B
+              type: reduce
+        noDataState: Alerting
+        execErrState: Alerting
+        for: 1m
+        annotations:
+          description: Loki or Alloy has been unavailable for more than one minute.
+          summary: OrderFlow logging pipeline is unavailable
+        labels:
+          service: logging-pipeline
+          severity: ""
+        isPaused: false
+        notification_settings:
+          receiver: Local webhook
