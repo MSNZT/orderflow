@@ -87,15 +87,10 @@ groups:
           isPaused: false
           notification_settings:
             receiver: Local webhook
-    - orgId: 1
-      name: orderflow-health
-      folder: OrderFlow
-      interval: 30s
-      rules:
-      - uid: efs3jl2a2wikgf
-        title: OrderFlow logging pipeline unavailable
-        condition: C
-        data:
+        - uid: efs3jl2a2wikgf
+          title: OrderFlow logging pipeline unavailable
+          condition: C
+          data:
           - refId: A
             relativeTimeRange:
               from: 600
@@ -159,15 +154,15 @@ groups:
               reducer: last
               refId: B
               type: reduce
-        noDataState: Alerting
-        execErrState: Alerting
-        for: 1m
-        annotations:
+          noDataState: Alerting
+          execErrState: Alerting
+          for: 1m
+          annotations:
           description: Loki or Alloy has been unavailable for more than one minute.
           summary: OrderFlow logging pipeline is unavailable
-        labels:
+          labels:
           service: logging-pipeline
-          severity: ""
-        isPaused: false
-        notification_settings:
+          severity: "warning"
+          isPaused: false
+          notification_settings:
           receiver: Local webhook
