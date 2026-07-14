@@ -10,7 +10,8 @@ import (
 
 type responseWriter struct {
 	http.ResponseWriter
-	statusCode int
+	statusCode  int
+	wroteHeader bool
 }
 
 func newResponseWriter(w http.ResponseWriter) *responseWriter {
@@ -21,6 +22,11 @@ func newResponseWriter(w http.ResponseWriter) *responseWriter {
 }
 
 func (w *responseWriter) WriteHeader(statusCode int) {
+	if w.wroteHeader {
+		return
+
+	}
+	w.wroteHeader = true
 	w.statusCode = statusCode
 	w.ResponseWriter.WriteHeader(statusCode)
 }
