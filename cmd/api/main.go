@@ -17,6 +17,7 @@ import (
 	usersapp "github.com/MSNZT/orderflow/internal/app/users"
 	"github.com/MSNZT/orderflow/internal/config"
 	"github.com/MSNZT/orderflow/internal/infrastructure/logger"
+	metricsinfra "github.com/MSNZT/orderflow/internal/infrastructure/metrics"
 	"github.com/MSNZT/orderflow/internal/infrastructure/password"
 	"github.com/MSNZT/orderflow/internal/infrastructure/postgres"
 	cartrepo "github.com/MSNZT/orderflow/internal/infrastructure/postgres/cart"
@@ -92,7 +93,16 @@ func main() {
 	orderRepository := ordersrepo.NewRepository(dbPool)
 	paymentRepository := paymentsrepo.NewRepository(dbPool)
 
-	paymentProvider := yookassa.NewProvider(yookassaClient)
+	metricsRegistry := metricsinfra.NewRegistry()
+	httpMetrics := metricsinfra.NewHTTPMetrics(metricsRegistry)
+	metricsHandler := metricsinfra.NewHandler(metricsRegistry)
+	jobMetrics := metricsinfra.NewJobsMetrics(metricsRegistry)
+	paymentsMetrics := metricsinfra.NewPaymentMetrics(metricsRegistry)
+
+	paymentProvider := metricsinfra.NewPaymentProviderDecorator(
+		yookassa.NewProvider(yookassaClient),
+		paymentsMetrics,
+	)
 
 	authService := authapp.NewService(usersService, tokenManager, sessionsRepository, cfg.JWT.RefreshTTL)
 	productsService := productsapp.NewService(productsRepository, inventoryRepository, txManager)
@@ -112,18 +122,20 @@ func main() {
 
 	webhookHandler := webhooks.NewHandler(log, paymentService, paymentProvider)
 
-	workers := worker.New(log)
+	workers := worker.New(log, jobMetrics)
 	jobs.RegisterOrderExpiration(workers, orderService, cfg.Orders, log)
 	workers.StartAll(ctx)
 
 	router := router.NewRouter(log, tokenManager, router.RouterDependencies{
-		AuthHandler:     authHandler,
-		ProductsHandler: productsHandler,
-		CartHandler:     cartHandler,
-		HealthHandler:   healthHandler,
-		OrderHandler:    orderHandler,
-		PaymentHandler:  paymentHandler,
-		WebhookHandler:  webhookHandler,
+		AuthHandler:            authHandler,
+		ProductsHandler:        productsHandler,
+		CartHandler:            cartHandler,
+		HealthHandler:          healthHandler,
+		OrderHandler:           orderHandler,
+		PaymentHandler:         paymentHandler,
+		WebhookHandler:         webhookHandler,
+		MetricsHandler:         metricsHandler,
+		RequestMetricsRecorder: httpMetrics,
 	})
 
 	srv := server.New(cfg, log, router)

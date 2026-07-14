@@ -18,13 +18,15 @@ import (
 )
 
 type RouterDependencies struct {
-	AuthHandler     *auth.Handler
-	ProductsHandler *products.Handler
-	CartHandler     *cart.Handler
-	HealthHandler   *health.Handler
-	OrderHandler    *orders.Handler
-	PaymentHandler  *payments.Handler
-	WebhookHandler  *webhooks.Handler
+	AuthHandler            *auth.Handler
+	ProductsHandler        *products.Handler
+	CartHandler            *cart.Handler
+	HealthHandler          *health.Handler
+	OrderHandler           *orders.Handler
+	PaymentHandler         *payments.Handler
+	WebhookHandler         *webhooks.Handler
+	MetricsHandler         http.Handler
+	RequestMetricsRecorder httpmw.RequestMetricsRecorder
 }
 
 func NewRouter(log *slog.Logger, tokenParser httpmw.TokenParser, deps RouterDependencies) http.Handler {
@@ -32,10 +34,14 @@ func NewRouter(log *slog.Logger, tokenParser httpmw.TokenParser, deps RouterDepe
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
 	r.Use(httpmw.RequestLogger(log))
+	r.Use(
+		httpmw.RequestMetrics(deps.RequestMetricsRecorder),
+	)
 	r.Use(middleware.Recoverer)
 
 	r.Get("/health/live", deps.HealthHandler.Live)
 	r.Get("/health/ready", deps.HealthHandler.Ready)
+	r.Method(http.MethodGet, "/metrics", deps.MetricsHandler)
 
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Post("/auth/register", deps.AuthHandler.Register)
