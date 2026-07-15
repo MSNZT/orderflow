@@ -1,0 +1,15 @@
+name: CI
+on:
+  push:
+    branches:
+      - main
+      - chore/ci
+  pull_request:
+    branches:
+      - main
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Print message
+        run: echo "OrderFlow CI is running"
