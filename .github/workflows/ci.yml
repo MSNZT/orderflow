@@ -11,5 +11,12 @@ jobs:
   quality:
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+      - name: Inspect repository
+        run: |
+          pwd
+          ls -la
+          git log -1 --oneline
       - name: Print message
         run: echo "OrderFlow CI is running"
