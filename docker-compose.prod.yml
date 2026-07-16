@@ -1,7 +1,7 @@
 name: orderflow_prod
 services:
   api:
-    build: .
+    image: ${ORDERFLOW_IMAGE:?ORDERFLOW_IMAGE is required}
     environment:
       - CONFIG_PATH=/app/config/prod.yaml
     env_file: .env.prod
