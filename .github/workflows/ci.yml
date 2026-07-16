@@ -13,6 +13,13 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Check go version
+        run: go version
       - name: Inspect repository
         run: |
           pwd
