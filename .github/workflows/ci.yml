@@ -1,0 +1,64 @@
+name: CI
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    env:
+      TEST_POSTGRES_DSN: postgres://orderflow:orderflow@localhost:5432/orderflow?sslmode=disable
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: orderflow
+          POSTGRES_PASSWORD: orderflow
+          POSTGRES_DB: orderflow
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U orderflow -d orderflow"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Check go version
+        run: go version
+      - name: Download dependencies
+        run: go mod download
+      - name: Check formatting
+        run: |
+          unformatted_files="$(gofmt -l .)"
+
+          if [ -n "$unformatted_files" ]; then
+            echo "The following files are not formatted:"
+            echo "$unformatted_files"
+            exit 1
+          fi
+      - name: Run vet
+        run: go vet ./...
+      - name: Apply database migrations
+        run: |
+          docker run --rm \
+            --network host \
+            -v "$GITHUB_WORKSPACE/migrations:/migrations:ro" \
+            migrate/migrate:v4.19.1 \
+            -path=/migrations \
+            -database "$TEST_POSTGRES_DSN" \
+            up
+      - name: Go build app
+        run: go build -o /tmp/orderflow-api ./cmd/api
+      - name: Run tests
+        run: go test ./...
+      

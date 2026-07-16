@@ -116,6 +116,7 @@ func (h *Handler) processPaymentEvent(
 		)
 		response.InternalError(w)
 		return
+
 	}
 
 	if providerPayment == nil {

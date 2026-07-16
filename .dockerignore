@@ -3,4 +3,5 @@
 .vscode
 bin
 .env
+.env.example
 *.log
