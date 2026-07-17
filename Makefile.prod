@@ -1,7 +1,11 @@
 -include .env.prod
+-include .env.deploy
 export
 
-COMPOSE = docker compose --env-file .env.prod -f docker-compose.prod.yml
+COMPOSE = docker compose \
+	--env-file .env.prod \
+	--env-file .env.deploy \
+	-f docker-compose.prod.yml
 
 .PHONY: check-env
 .PHONY: start-db start-api stop ps logs-api logs-postgres
@@ -10,12 +14,39 @@ COMPOSE = docker compose --env-file .env.prod -f docker-compose.prod.yml
 check-env:
 	@test -f ".env.prod" || (echo "missing .env.prod file" && exit 1)
 	@test -n "$$POSTGRES_DSN" || (echo "POSTGRES_DSN is not set in .env.prod" && exit 1)
+	@test -n "$$ORDERFLOW_IMAGE" || (echo "ORDERFLOW_IMAGE" is not set in .env.deploy && exit !)
+
+pull-api: check-env
+	$(COMPOSE) pull api
+
+start-api: check-env
+	$(COMPOSE) up -d --no-deps --force-recreate api
 
 start-db: check-env
 	$(COMPOSE) up -d postgres
 
-start-api: check-env
-	$(COMPOSE) up --build -d api
+monitoring-up: check-env
+	$(COMPOSE) up -d prometheus loki grafana alloy
+
+monitoring-recreate: check-env
+	$(COMPOSE) up -d --force-recreate prometheus loki grafana alloy
+
+wait-api:
+	@echo "Waiting for API to be ready..."
+	@attempt=1; \
+	while [ $$attempt -le 30 ]; do \
+		echo "Attempt $$attempt/30..."; \
+		if curl -s -f http://127.0.0.1:8080/health/ready > /dev/null 2>&1; then \
+			echo "API is ready!"; \
+			exit 0; \
+		fi; \
+		attempt=$$((attempt + 1)); \
+		sleep 2; \
+	done; \
+	echo "API failed to start after 30 attempts!"; \
+	echo "Showing last 50 lines from API logs:"; \
+	$(COMPOSE) logs --tail=50 api; \
+	exit 1
 
 stop:
 	$(COMPOSE) down
@@ -37,5 +68,15 @@ migrate-version: check-env
 
 deploy:
 	$(MAKE) -f Makefile.prod start-db
+	$(MAKE) -f Makefile.prod pull-api
 	$(MAKE) -f Makefile.prod migrate-up
 	$(MAKE) -f Makefile.prod start-api
+	$(MAKE) -f Makefile.prod wait-api
+
+bootstrap:
+	$(MAKE) -f Makefile.prod start-db
+	$(MAKE) -f Makefile.prod monitoring-up
+	$(MAKE) -f Makefile.prod pull-api
+	$(MAKE) -f Makefile.prod migrate-up
+	$(MAKE) -f Makefile.prod start-api
+	$(MAKE) -f Makefile.prod wait-api
