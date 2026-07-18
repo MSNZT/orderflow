@@ -66,7 +66,7 @@ migrate-up: check-env
 migrate-version: check-env
 	$(COMPOSE) --profile tools run --rm migrate -path=/migrations -database "$$POSTGRES_DSN" version
 
-deploy:
+deploy:	
 	$(MAKE) -f Makefile.prod start-db
 	$(MAKE) -f Makefile.prod pull-api
 	$(MAKE) -f Makefile.prod migrate-up
