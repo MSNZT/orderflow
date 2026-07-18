@@ -1,10 +1,17 @@
 name: CD
 on:
-  push:
+   workflow_run:
+    workflows:
+      - CI
+    types:
+      - completed
     branches:
       - main
 jobs:
   publish-image:
+    if: >
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -32,7 +39,7 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=sha,format=long
+            type=raw,value=sha-${{ github.event.workflow_run.head_sha }}
             type=raw,value=latest
 
       - name: Build and push image
@@ -74,8 +81,8 @@ jobs:
           VPS_PORT: ${{ vars.VPS_PORT }}
           VPS_USER: ${{ vars.VPS_USER }}
           DEPLOY_PATH: ${{ vars.DEPLOY_PATH }}
-          DEPLOY_SHA: ${{ github.sha }}
-          ORDERFLOW_IMAGE: ghcr.io/msnzt/orderflow:sha-${{ github.sha }}
+          DEPLOY_SHA: ${{ github.event.workflow_run.head_sha }}
+          ORDERFLOW_IMAGE: ghcr.io/msnzt/orderflow:sha-${{ github.event.workflow_run.head_sha }}
         run: |
           set -Eeuo pipefail
           ssh \
