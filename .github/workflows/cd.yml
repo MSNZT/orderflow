@@ -1,27 +1,90 @@
 name: CD
+
 on:
   workflow_run:
     workflows:
       - CI
     types:
       - completed
+    branches:
+      - main
+
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: orderflow-production
+  cancel-in-progress: false
+
 jobs:
-  publish-image:
-    if: >
-      github.event.workflow_run.conclusion == 'success' &&
-      github.event.workflow_run.head_branch == 'main'
+  resolve-version:
+    name: Resolve deployment version
+
+    if: >-
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.conclusion == 'success') ||
+      (github.event_name == 'workflow_dispatch' &&
+       github.ref == 'refs/heads/main')
+
     runs-on: ubuntu-latest
+
+    outputs:
+      sha: ${{ steps.version.outputs.sha }}
+      image: ${{ steps.version.outputs.image }}
+
+    steps:
+      - name: Resolve commit and image
+        id: version
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          WORKFLOW_RUN_SHA: ${{ github.event.workflow_run.head_sha }}
+          DISPATCH_SHA: ${{ github.sha }}
+        run: |
+          set -Eeuo pipefail
+
+          if [ "$EVENT_NAME" = "workflow_run" ]; then
+            deploy_sha="$WORKFLOW_RUN_SHA"
+          else
+            deploy_sha="$DISPATCH_SHA"
+          fi
+
+          if ! printf '%s' "$deploy_sha" |
+            grep -Eq '^[0-9a-f]{40}$'; then
+            echo "Invalid deployment SHA: $deploy_sha"
+            exit 1
+          fi
+
+          orderflow_image="ghcr.io/msnzt/orderflow:sha-$deploy_sha"
+
+          echo "Resolved commit: $deploy_sha"
+          echo "Resolved image:  $orderflow_image"
+
+          echo "sha=$deploy_sha" >> "$GITHUB_OUTPUT"
+          echo "image=$orderflow_image" >> "$GITHUB_OUTPUT"
+
+  publish-image:
+    name: Publish image
+    needs:
+      - resolve-version
+
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
     permissions:
       contents: read
       packages: write
+
     env:
       REGISTRY: ghcr.io
-      IMAGE_NAME: ${{ github.repository }}
+      IMAGE_NAME: msnzt/orderflow
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          ref: ${{ needs.resolve-version.outputs.sha }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
@@ -39,7 +102,7 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=raw,value=sha-${{ github.event.workflow_run.head_sha }}
+            type=raw,value=sha-${{ needs.resolve-version.outputs.sha }}
             type=raw,value=latest
 
       - name: Build and push image
@@ -48,19 +111,26 @@ jobs:
           context: .
           push: true
           tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }} 
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
   deploy:
     name: Deploy production
-    needs: publish-image
+
+    needs:
+      - resolve-version
+      - publish-image
+
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+
     environment:
       name: production
-    concurrency:
-      group: orderflow-production
-      cancel-in-progress: false
+
     permissions:
       contents: read
+
     steps:
       - name: Configure SSH
         env:
@@ -68,48 +138,80 @@ jobs:
           SSH_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
         run: |
           set -Eeuo pipefail
+          umask 077
+
           install -d -m 700 "$HOME/.ssh"
+
           printf '%s\n' "$SSH_PRIVATE_KEY" \
             > "$HOME/.ssh/orderflow_deploy"
-          chmod 600 "$HOME/.ssh/orderflow_deploy"
+
           printf '%s\n' "$SSH_KNOWN_HOSTS" \
             > "$HOME/.ssh/known_hosts"
-          chmod 600 "$HOME/.ssh/known_hosts"
+
+          chmod 600 \
+            "$HOME/.ssh/orderflow_deploy" \
+            "$HOME/.ssh/known_hosts"
+
       - name: Deploy image to VPS
         env:
           VPS_HOST: ${{ vars.VPS_HOST }}
           VPS_PORT: ${{ vars.VPS_PORT }}
           VPS_USER: ${{ vars.VPS_USER }}
           DEPLOY_PATH: ${{ vars.DEPLOY_PATH }}
-          DEPLOY_SHA: ${{ github.event.workflow_run.head_sha }}
-          ORDERFLOW_IMAGE: ghcr.io/msnzt/orderflow:sha-${{ github.event.workflow_run.head_sha }}
+          DEPLOY_SHA: ${{ needs.resolve-version.outputs.sha }}
+          ORDERFLOW_IMAGE: ${{ needs.resolve-version.outputs.image }}
         run: |
           set -Eeuo pipefail
+
+          test -n "$VPS_HOST"
+          test -n "$VPS_PORT"
+          test -n "$VPS_USER"
+          test -n "$DEPLOY_PATH"
+          test -n "$DEPLOY_SHA"
+          test -n "$ORDERFLOW_IMAGE"
+
           ssh \
             -i "$HOME/.ssh/orderflow_deploy" \
             -p "$VPS_PORT" \
             -o BatchMode=yes \
             -o IdentitiesOnly=yes \
             -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
             "$VPS_USER@$VPS_HOST" \
             bash -s -- \
               "$DEPLOY_SHA" \
               "$ORDERFLOW_IMAGE" \
               "$DEPLOY_PATH" <<'REMOTE'
           set -Eeuo pipefail
+
           DEPLOY_SHA="$1"
           ORDERFLOW_IMAGE="$2"
           DEPLOY_PATH="$3"
+
           test -n "$DEPLOY_SHA"
           test -n "$ORDERFLOW_IMAGE"
           test -n "$DEPLOY_PATH"
+
           cd "$DEPLOY_PATH"
+
           echo "Deploying commit: $DEPLOY_SHA"
           echo "Deploying image:  $ORDERFLOW_IMAGE"
-          git fetch --prune origin main
+
+          git fetch --prune origin
+
+          git cat-file -e "${DEPLOY_SHA}^{commit}"
+
+          if ! git merge-base \
+            --is-ancestor "$DEPLOY_SHA" origin/main; then
+            echo "Commit $DEPLOY_SHA is not contained in origin/main"
+            exit 1
+          fi
+
           git switch main
           git reset --hard "$DEPLOY_SHA"
+
           printf 'ORDERFLOW_IMAGE=%s\n' "$ORDERFLOW_IMAGE" \
             > .env.deploy
+
           make -f Makefile.prod deploy
           REMOTE
