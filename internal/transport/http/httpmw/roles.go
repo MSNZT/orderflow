@@ -8,7 +8,7 @@ import (
 	"github.com/MSNZT/orderflow/internal/transport/http/response"
 )
 
-func RequireRole(allowedRoles ...users.Role) func(http.Handler) http.Handler {
+func RequireRole(resp *response.Response, allowedRoles ...users.Role) func(http.Handler) http.Handler {
 	allowedMap := make(map[users.Role]struct{}, len(allowedRoles))
 
 	for _, role := range allowedRoles {
@@ -19,12 +19,12 @@ func RequireRole(allowedRoles ...users.Role) func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			role, ok := authcontext.UserRole(r.Context())
 			if !ok {
-				response.Error(w, http.StatusUnauthorized, "unauthorized")
+				resp.Error(w, http.StatusUnauthorized, "unauthorized")
 				return
 			}
 
 			if _, hasAccess := allowedMap[role]; !hasAccess {
-				response.Error(w, http.StatusForbidden, "forbidden")
+				resp.Error(w, http.StatusForbidden, "forbidden")
 				return
 			}
 

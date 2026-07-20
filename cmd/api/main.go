@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -36,6 +35,7 @@ import (
 	ordershttp "github.com/MSNZT/orderflow/internal/transport/http/orders"
 	paymentshttp "github.com/MSNZT/orderflow/internal/transport/http/payments"
 	productshttp "github.com/MSNZT/orderflow/internal/transport/http/products"
+	"github.com/MSNZT/orderflow/internal/transport/http/response"
 	"github.com/MSNZT/orderflow/internal/transport/http/router"
 	"github.com/MSNZT/orderflow/internal/transport/http/server"
 	"github.com/MSNZT/orderflow/internal/transport/http/webhooks"
@@ -46,7 +46,7 @@ func main() {
 
 	cfg, err := config.Load()
 	if err != nil {
-		log.Error("failed to load config", slog.String("error", err.Error()))
+		log.Error("failed to load config", logger.Err(err))
 		os.Exit(1)
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -54,15 +54,18 @@ func main() {
 
 	dbPool, err := postgres.NewPool(ctx, &cfg.Postgres)
 	if err != nil {
-		log.Error("failed to connect to postgres", slog.String("error", err.Error()))
+		log.Error("failed to connect to postgres", logger.Err(err))
 		os.Exit(1)
 	}
 	defer dbPool.Close()
 
 	txManager := postgres.NewTxManager(dbPool)
 
+	resp := response.New(log)
+	cookieManager := authhttp.NewCookieManager(cfg.Env.IsProduction())
+
 	const cost = 12
-	healthHandler := health.NewHandler(log, dbPool)
+	healthHandler := health.NewHandler(log, resp, dbPool)
 
 	usersRepository := usersrepo.NewRepository(dbPool)
 	hasher := password.NewBcryptHasher(cost)
@@ -79,10 +82,7 @@ func main() {
 		},
 	})
 	if err != nil {
-		log.Error(
-			"failed to create yookassa client",
-			slog.String("error", err.Error()),
-		)
+		log.Error("failed to create yookassa client", logger.Err(err))
 		os.Exit(1)
 	}
 
@@ -114,19 +114,19 @@ func main() {
 		paymentRepository, orderRepository, paymentProvider, inventoryRepository, txManager,
 	)
 
-	authHandler := authhttp.NewHandler(log, usersService, authService)
-	productsHandler := productshttp.NewHandler(log, productsService)
-	cartHandler := carthttp.NewHandler(log, cartService)
-	orderHandler := ordershttp.NewHandler(log, orderService)
-	paymentHandler := paymentshttp.NewHandler(log, paymentService)
+	authHandler := authhttp.NewHandler(resp, usersService, authService, cookieManager)
+	productsHandler := productshttp.NewHandler(resp, productsService)
+	cartHandler := carthttp.NewHandler(resp, cartService)
+	orderHandler := ordershttp.NewHandler(resp, orderService)
+	paymentHandler := paymentshttp.NewHandler(resp, paymentService)
 
-	webhookHandler := webhooks.NewHandler(log, paymentService, paymentProvider)
+	webhookHandler := webhooks.NewHandler(log, resp, paymentService, paymentProvider)
 
 	workers := worker.New(log, jobMetrics)
 	jobs.RegisterOrderExpiration(workers, orderService, cfg.Orders, log)
 	workers.StartAll(ctx)
 
-	router := router.NewRouter(log, tokenManager, router.RouterDependencies{
+	router := router.NewRouter(log, resp, tokenManager, router.RouterDependencies{
 		AuthHandler:            authHandler,
 		ProductsHandler:        productsHandler,
 		CartHandler:            cartHandler,
@@ -141,7 +141,7 @@ func main() {
 	srv := server.New(cfg, log, router)
 
 	if err := srv.Run(ctx); err != nil {
-		log.Error("application failed", slog.String("error", err.Error()))
+		log.Error("application failed", logger.Err(err))
 		os.Exit(1)
 	}
 

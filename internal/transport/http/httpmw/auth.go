@@ -16,24 +16,24 @@ type TokenParser interface {
 	ParseAccessToken(accessToken string) (*token.Claims, error)
 }
 
-func Auth(tokenParser TokenParser) func(http.Handler) http.Handler {
+func Auth(tokenParser TokenParser, resp *response.Response) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			accessToken, err := extractAuthorizationToken(r)
 			if err != nil {
-				_ = response.Error(w, http.StatusUnauthorized, "unauthorized")
+				resp.Error(w, http.StatusUnauthorized, "unauthorized")
 				return
 			}
 
 			claims, err := tokenParser.ParseAccessToken(accessToken)
 			if err != nil {
-				_ = response.Error(w, http.StatusUnauthorized, "unauthorized")
+				resp.Error(w, http.StatusUnauthorized, "unauthorized")
 				return
 			}
 
 			userID, err := uuid.Parse(claims.Subject)
 			if err != nil {
-				_ = response.Error(w, http.StatusUnauthorized, "unauthorized")
+				resp.Error(w, http.StatusUnauthorized, "unauthorized")
 				return
 			}
 
