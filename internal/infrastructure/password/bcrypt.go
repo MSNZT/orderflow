@@ -5,14 +5,18 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+const defaultBcryptCost = 12
+
 type BcryptHasher struct {
 	cost int
 }
 
 var _ users.PasswordHasher = (*BcryptHasher)(nil)
 
-func NewBcryptHasher(cost int) *BcryptHasher {
-	return &BcryptHasher{cost: cost}
+func NewBcryptHasher() *BcryptHasher {
+	return &BcryptHasher{
+		cost: defaultBcryptCost,
+	}
 }
 
 func (h *BcryptHasher) Hash(password string) (string, error) {

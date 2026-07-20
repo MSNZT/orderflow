@@ -3,13 +3,14 @@ package payments
 import (
 	"context"
 	"errors"
-	"log/slog"
+	"fmt"
 	"net/http"
 	"strings"
 
 	"github.com/MSNZT/orderflow/internal/app/orders"
 	paymentsapp "github.com/MSNZT/orderflow/internal/app/payments"
 	"github.com/MSNZT/orderflow/internal/transport/http/authcontext"
+	"github.com/MSNZT/orderflow/internal/transport/http/httpmw"
 	"github.com/MSNZT/orderflow/internal/transport/http/response"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -21,39 +22,36 @@ type Service interface {
 
 type Handler struct {
 	service Service
-	log     *slog.Logger
+	resp    *response.Response
 }
 
-func NewHandler(log *slog.Logger, service Service) *Handler {
-	return &Handler{log: log, service: service}
+func NewHandler(resp *response.Response, service Service) *Handler {
+	return &Handler{resp: resp, service: service}
 }
 
-func (h *Handler) CreatePayment(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) CreatePayment(w http.ResponseWriter, r *http.Request) error {
 	const op = "payments.handler.CreatePayment"
 
 	userID, ok := authcontext.UserID(r.Context())
 	if !ok {
-		response.Unauthorized(w)
-		return
+		return httpmw.NewHTTPError(http.StatusUnauthorized, op, "unauthorized")
 	}
 
 	idStr := strings.TrimSpace(chi.URLParam(r, "orderID"))
 	if idStr == "" {
-		response.BadRequestMsg(w, "invalid order id")
-		return
+		return httpmw.NewHTTPError(http.StatusBadRequest, op, "invalid order id")
 	}
 
 	orderID, err := uuid.Parse(idStr)
 	if err != nil {
-		response.BadRequestMsg(w, "invalid order id")
-		return
+		return httpmw.NewHTTPError(http.StatusBadRequest, op, "invalid order id")
 	}
 
 	payment, err := h.service.CreatePayment(r.Context(), userID, orderID)
 	if err != nil {
-		writeCreatePaymentError(w, err, h.log, op)
-		return
+		return h.writeCreatePaymentError(err, op)
 	}
+
 	res := createPaymentResponse{
 		ID:              payment.ID,
 		OrderID:         payment.OrderID,
@@ -62,35 +60,37 @@ func (h *Handler) CreatePayment(w http.ResponseWriter, r *http.Request) {
 		Currency:        payment.Currency,
 		ConfirmationURL: payment.ConfirmationURL,
 	}
-	if err := response.JSON(w, http.StatusOK, res); err != nil {
-		response.InternalError(w)
-		h.log.Error("failed to send payment response", slog.String("op", op), slog.String("error", err.Error()))
-		return
-	}
+
+	h.resp.JSON(w, http.StatusOK, res)
+	return nil
 }
 
-func writeCreatePaymentError(w http.ResponseWriter, err error, log *slog.Logger, op string) {
+func (h *Handler) writeCreatePaymentError(err error, op string) error {
 	switch {
 	case errors.Is(err, paymentsapp.ErrUserIDIsNil):
-		response.Unauthorized(w)
+		return httpmw.NewHTTPError(http.StatusUnauthorized, op, "unauthorized")
+
 	case errors.Is(err, paymentsapp.ErrOrderIDIsNil):
-		response.BadRequestMsg(w, "invalid order id")
+		return httpmw.NewHTTPError(http.StatusBadRequest, op, "invalid order id")
+
 	case errors.Is(err, orders.ErrOrderNotFound):
-		response.Error(w, http.StatusNotFound, "order not found")
+		return httpmw.NewHTTPError(http.StatusNotFound, op, "order not found")
+
 	case errors.Is(err, paymentsapp.ErrOrderNotPayable):
-		response.Error(w, http.StatusConflict, "order is not payable")
+		return httpmw.NewHTTPError(http.StatusConflict, op, "order is not payable")
+
 	case errors.Is(err, paymentsapp.ErrOrderExpired):
-		response.Error(w, http.StatusConflict, "order has expired")
+		return httpmw.NewHTTPError(http.StatusConflict, op, "order has expired")
+
 	case errors.Is(err, paymentsapp.ErrPaymentStateConflict):
-		response.Error(w, http.StatusConflict, "payment state conflict")
+		return httpmw.NewHTTPError(http.StatusConflict, op, "payment state conflict")
+
 	case errors.Is(err, paymentsapp.ErrProviderRejected):
-		log.Error("payment provider rejected request", slog.String("op", op), slog.Any("error", err))
-		response.Error(w, http.StatusBadGateway, "payment provider rejected request")
+		return httpmw.WrapHTTPError(http.StatusBadGateway, op, "payment provider rejected request", err)
+
 	case errors.Is(err, paymentsapp.ErrProviderFailure):
-		log.Error("payment provider failure", slog.String("op", op), slog.Any("error", err))
-		response.Error(w, http.StatusServiceUnavailable, "payment provider is temporarily unavailable")
+		return httpmw.WrapHTTPError(http.StatusServiceUnavailable, op, "payment provider is temporarily unavailable", err)
 	default:
-		log.Error("create payment failed", slog.String("op", op), slog.Any("error", err))
-		response.Error(w, http.StatusInternalServerError, "internal server error")
+		return fmt.Errorf("%s: create payment failed: %w", op, err)
 	}
 }
