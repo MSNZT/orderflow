@@ -4,10 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"log/slog"
+	"fmt"
 	"net/http"
 
 	"github.com/MSNZT/orderflow/internal/app/products"
+	"github.com/MSNZT/orderflow/internal/transport/http/httpmw"
 	"github.com/MSNZT/orderflow/internal/transport/http/response"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -27,7 +28,7 @@ type Service interface {
 
 type Handler struct {
 	service Service
-	log     *slog.Logger
+	resp    *response.Response
 }
 
 type productResponse struct {
@@ -50,69 +51,61 @@ type productCreateRequest struct {
 	InitialQuantity int32   `json:"initial_quantity"`
 }
 
-func NewHandler(log *slog.Logger, service Service) *Handler {
-	return &Handler{log: log, service: service}
+func NewHandler(resp *response.Response, service Service) *Handler {
+	return &Handler{resp: resp, service: service}
 }
 
-func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) List(w http.ResponseWriter, r *http.Request) error {
 	const op = "products.handler.List"
 
 	products, err := h.service.List(r.Context())
 	if err != nil {
-		h.log.Error("failed to get product list", slog.String("op", op), slog.String("error", err.Error()))
-		response.Error(w, http.StatusInternalServerError, "internal server error")
-		return
+		return fmt.Errorf("%s: failed to get product list: %w", op, err)
 	}
 
 	respProducts := make([]productResponse, len(products))
-	for i, p := range products {
-		respProducts[i] = toProductResponse(p)
+	for i := range products {
+		respProducts[i] = toProductResponse(&products[i])
 	}
 
-	if err := response.JSON(w, http.StatusOK, listResponse{Products: respProducts}); err != nil {
-		h.log.Error("failed to send json response", slog.String("op", op), slog.String("error", err.Error()))
-		response.Error(w, http.StatusInternalServerError, "internal server error")
-		return
-	}
+	h.resp.JSON(w, http.StatusOK, listResponse{Products: respProducts})
+
+	return nil
 }
 
-func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) error {
 	const op = "products.handler.GetByID"
 
 	paramId := chi.URLParam(r, "id")
 	id, err := uuid.Parse(paramId)
 	if err != nil {
-		response.Error(w, http.StatusBadRequest, "invalid id")
-		return
+		return httpmw.NewHTTPError(http.StatusBadRequest, op, "invalid id")
 	}
 
 	product, err := h.service.GetByID(r.Context(), id)
 	if err != nil {
 		switch {
 		case errors.Is(err, products.ErrProductNotFound):
-			response.Error(w, http.StatusNotFound, "product not found")
-			return
+			return httpmw.NewHTTPError(http.StatusNotFound, op, "product not found")
 		default:
-			h.log.Error("failed to get product by id", slog.String("op", op), slog.String("error", err.Error()))
-			response.Error(w, http.StatusInternalServerError, "internal server error")
-			return
+			return fmt.Errorf("%s: failed to get product by id: %w", op, err)
 		}
 	}
 
-	if err := response.JSON(w, http.StatusOK, toProductResponse(*product)); err != nil {
-		h.log.Error("failed to send json response", slog.String("op", op), slog.String("error", err.Error()))
-		response.Error(w, http.StatusInternalServerError, "internal server error")
-		return
+	if product == nil {
+		return fmt.Errorf("%s: business logic violation: service returned nil product", op)
 	}
+
+	h.resp.JSON(w, http.StatusOK, toProductResponse(product))
+	return nil
 }
 
-func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) Create(w http.ResponseWriter, r *http.Request) error {
 	const op = "products.handler.Create"
 
 	var req productCreateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		response.Error(w, http.StatusBadRequest, "invalid body")
-		return
+		return httpmw.NewHTTPError(http.StatusBadRequest, op, "invalid body")
 	}
 
 	input := products.CreateInput{
@@ -127,35 +120,30 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		switch {
 		case errors.Is(err, products.ErrProductNameInvalid):
-			response.Error(w, http.StatusUnprocessableEntity, products.ErrProductNameInvalid.Error())
-			return
+			return httpmw.NewHTTPError(http.StatusUnprocessableEntity, op, products.ErrProductNameInvalid.Error())
 		case errors.Is(err, products.ErrProductPriceCentsInvalid):
-			response.Error(w, http.StatusUnprocessableEntity, products.ErrProductPriceCentsInvalid.Error())
-			return
+			return httpmw.NewHTTPError(http.StatusUnprocessableEntity, op, products.ErrProductPriceCentsInvalid.Error())
 		case errors.Is(err, products.ErrProductCurrencyInvalid):
-			response.Error(w, http.StatusUnprocessableEntity, products.ErrProductCurrencyInvalid.Error())
-			return
+			return httpmw.NewHTTPError(http.StatusUnprocessableEntity, op, products.ErrProductCurrencyInvalid.Error())
 		case errors.Is(err, products.ErrInitialQuantityInvalid):
-			response.Error(w, http.StatusUnprocessableEntity, products.ErrInitialQuantityInvalid.Error())
-			return
+			return httpmw.NewHTTPError(http.StatusUnprocessableEntity, op, products.ErrInitialQuantityInvalid.Error())
 		case errors.Is(err, products.ErrProductAlreadyExists):
-			response.Error(w, http.StatusConflict, products.ErrProductAlreadyExists.Error())
-			return
+			return httpmw.NewHTTPError(http.StatusConflict, op, products.ErrProductAlreadyExists.Error())
 		default:
-			h.log.Error("failed to create product", slog.String("op", op), slog.String("err", err.Error()))
-			response.Error(w, http.StatusInternalServerError, "internal server error")
-			return
+			return fmt.Errorf("%s: failed to create product: %w", op, err)
 		}
 	}
 
-	if err = response.JSON(w, http.StatusCreated, toProductResponse(*product)); err != nil {
-		h.log.Error("failed to send product response", slog.String("op", op), slog.String("err", err.Error()))
-		response.Error(w, http.StatusInternalServerError, "internal server error")
-		return
+	if product == nil {
+		return fmt.Errorf("%s: business logic violation: service returned nil product", op)
+
 	}
+
+	h.resp.JSON(w, http.StatusCreated, toProductResponse(product))
+	return nil
 }
 
-func toProductResponse(p products.Product) productResponse {
+func toProductResponse(p *products.Product) productResponse {
 	return productResponse{
 		ID:          p.ID,
 		Name:        p.Name,

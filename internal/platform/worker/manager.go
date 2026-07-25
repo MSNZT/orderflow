@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"log/slog"
+	"sync"
 	"time"
 )
 
@@ -35,8 +36,9 @@ type Manager struct {
 	log             *slog.Logger
 	jobs            map[string]Job
 	jobConfigs      map[string]JobConfig
-	cancels         map[string]context.CancelFunc
+	cancels         map[string]context.CancelCauseFunc
 	metricsRecorder MetricsRecorder
+	wg              sync.WaitGroup
 }
 
 func New(log *slog.Logger, metricsRecorder MetricsRecorder) *Manager {
@@ -44,8 +46,9 @@ func New(log *slog.Logger, metricsRecorder MetricsRecorder) *Manager {
 		log:             log,
 		jobs:            make(map[string]Job),
 		jobConfigs:      make(map[string]JobConfig),
-		cancels:         make(map[string]context.CancelFunc),
+		cancels:         make(map[string]context.CancelCauseFunc),
 		metricsRecorder: metricsRecorder,
+		wg:              sync.WaitGroup{},
 	}
 }
 
@@ -66,14 +69,22 @@ func (m *Manager) StartAll(ctx context.Context) {
 	for name, job := range m.jobs {
 		cfg := m.jobConfigs[name]
 
-		workerCtx, cancel := context.WithCancel(ctx)
+		workerCtx, cancel := context.WithCancelCause(ctx)
 		m.cancels[name] = cancel
 
+		m.wg.Add(1)
 		go m.runPeriodic(workerCtx, name, job, cfg)
 	}
 }
 
+func (m *Manager) Wait() {
+	m.wg.Wait()
+	m.log.Info("all workers stopped")
+}
+
 func (m *Manager) runPeriodic(ctx context.Context, name string, job Job, cfg JobConfig) {
+	defer m.wg.Done()
+
 	if cfg.RunOnStart {
 		m.executeJob(ctx, name, job)
 	}

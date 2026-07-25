@@ -10,6 +10,7 @@ import (
 )
 
 type Config struct {
+	Env      Environment    `env:"APP_ENV"`
 	HTTP     HTTPConfig     `yaml:"http"`
 	Postgres PostgresConfig `yaml:"postgres"`
 	JWT      JWTConfig      `yaml:"jwt"`
@@ -73,6 +74,10 @@ func Load() (*Config, error) {
 }
 
 func (c *Config) validate() error {
+	if err := c.Env.Validate(); err != nil {
+		return err
+	}
+
 	if c.HTTP.Addr == "" {
 		return fmt.Errorf("http addr is required")
 	}

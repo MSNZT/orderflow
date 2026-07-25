@@ -4,13 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"log/slog"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strconv"
 
 	cartapp "github.com/MSNZT/orderflow/internal/app/cart"
 	"github.com/MSNZT/orderflow/internal/transport/http/authcontext"
+	"github.com/MSNZT/orderflow/internal/transport/http/httpmw"
 	"github.com/MSNZT/orderflow/internal/transport/http/response"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -26,7 +27,7 @@ type Service interface {
 
 type Handler struct {
 	service Service
-	log     *slog.Logger
+	resp    *response.Response
 }
 
 type listResponse struct {
@@ -57,24 +58,22 @@ const (
 	defaultCartPage  = 1
 )
 
-func NewHandler(log *slog.Logger, service Service) *Handler {
-	return &Handler{log: log, service: service}
+func NewHandler(resp *response.Response, service Service) *Handler {
+	return &Handler{resp: resp, service: service}
 }
 
-func (h *Handler) GetItems(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) GetItems(w http.ResponseWriter, r *http.Request) error {
 	const op = "cart.handler.GetItems"
 
 	userID, ok := authcontext.UserID(r.Context())
 	if !ok {
-		response.Unauthorized(w)
-		return
+		return httpmw.NewHTTPError(http.StatusUnauthorized, op, "unauthorized")
 	}
 
 	queryParams := r.URL.Query()
 	page, ok := parsePagination(queryParams, "page")
 	if !ok {
-		response.BadRequestMsg(w, "invalid query params")
-		return
+		return httpmw.NewHTTPError(http.StatusBadRequest, op, "invalid query params")
 	}
 
 	if page < defaultCartPage {
@@ -83,8 +82,7 @@ func (h *Handler) GetItems(w http.ResponseWriter, r *http.Request) {
 
 	limit, ok := parsePagination(queryParams, "limit")
 	if !ok {
-		response.BadRequestMsg(w, "invalid query params")
-		return
+		return httpmw.NewHTTPError(http.StatusBadRequest, op, "invalid query params")
 	}
 
 	if limit <= 0 {
@@ -105,12 +103,9 @@ func (h *Handler) GetItems(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		switch {
 		case errors.Is(err, cartapp.ErrUserIDIsNil):
-			response.Unauthorized(w)
-			return
+			return httpmw.NewHTTPError(http.StatusUnauthorized, op, "unauthorized")
 		default:
-			h.log.Error("failed to get cart items", slog.String("op", op), slog.String("err", err.Error()))
-			response.InternalError(w)
-			return
+			return fmt.Errorf("%s: failed to get cart items: %w", op, err)
 		}
 	}
 
@@ -119,29 +114,25 @@ func (h *Handler) GetItems(w http.ResponseWriter, r *http.Request) {
 		cartItems[i] = toCartItemResponse(item)
 	}
 
-	if err := response.JSON(w, http.StatusOK, listResponse{
+	h.resp.JSON(w, http.StatusOK, listResponse{
 		Items:           cartItems,
 		TotalPriceCents: cart.TotalPriceCents,
-	}); err != nil {
-		h.log.Error("failed to send cart response", slog.String("op", op), slog.String("err", err.Error()))
-		response.Error(w, http.StatusInternalServerError, "internal server error")
-		return
-	}
+	})
+
+	return nil
 }
 
-func (h *Handler) AddItem(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) AddItem(w http.ResponseWriter, r *http.Request) error {
 	const op = "cart.handler.AddItem"
 
 	userID, ok := authcontext.UserID(r.Context())
 	if !ok {
-		response.Unauthorized(w)
-		return
+		return httpmw.NewHTTPError(http.StatusUnauthorized, op, "unauthorized")
 	}
 
 	var req addItemRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		response.BadRequest(w)
-		return
+		return httpmw.NewHTTPError(http.StatusBadRequest, op, "invalid request body")
 	}
 
 	input := cartapp.AddItemInput{
@@ -153,47 +144,39 @@ func (h *Handler) AddItem(w http.ResponseWriter, r *http.Request) {
 	if err := h.service.AddItem(r.Context(), input); err != nil {
 		switch {
 		case errors.Is(err, cartapp.ErrUserIDIsNil):
-			response.Unauthorized(w)
-			return
+			return httpmw.NewHTTPError(http.StatusUnauthorized, op, "unauthorized")
 		case errors.Is(err, cartapp.ErrProductIDIsNil):
-			response.Error(w, http.StatusBadRequest, cartapp.ErrProductIDIsNil.Error())
-			return
+			return httpmw.NewHTTPError(http.StatusBadRequest, op, cartapp.ErrProductIDIsNil.Error())
 		case errors.Is(err, cartapp.ErrQuantityInvalid):
-			response.Error(w, http.StatusUnprocessableEntity, cartapp.ErrQuantityInvalid.Error())
-			return
+			return httpmw.NewHTTPError(http.StatusUnprocessableEntity, op, cartapp.ErrQuantityInvalid.Error())
 		case errors.Is(err, cartapp.ErrProductNotAvailable):
-			response.Error(w, http.StatusNotFound, cartapp.ErrProductNotAvailable.Error())
-			return
+			return httpmw.NewHTTPError(http.StatusNotFound, op, cartapp.ErrProductNotAvailable.Error())
 		default:
-			h.log.Error("failed to add item to cart items", slog.String("op", op), slog.String("err", err.Error()))
-			response.InternalError(w)
-			return
+			return fmt.Errorf("%s: failed to add item to cart items: %w", op, err)
 		}
 	}
 
-	response.NoContent(w)
+	h.resp.NoContent(w)
+	return nil
 }
 
-func (h *Handler) UpdateItemQuantity(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) UpdateItemQuantity(w http.ResponseWriter, r *http.Request) error {
 	const op = "cart.handler.UpdateItemQuantity"
 
 	productIDParam := chi.URLParam(r, "productID")
 	productID, err := uuid.Parse(productIDParam)
 	if err != nil {
-		response.BadRequest(w)
-		return
+		return httpmw.NewHTTPError(http.StatusBadRequest, op, "invalid product id")
 	}
 
 	userID, ok := authcontext.UserID(r.Context())
 	if !ok {
-		response.Unauthorized(w)
-		return
+		return httpmw.NewHTTPError(http.StatusUnauthorized, op, "unauthorized")
 	}
 
 	var req updateItemQuantityRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		response.BadRequest(w)
-		return
+		return httpmw.NewHTTPError(http.StatusBadRequest, op, "invalid request body")
 	}
 
 	input := cartapp.UpdateItemQuantityInput{
@@ -205,81 +188,69 @@ func (h *Handler) UpdateItemQuantity(w http.ResponseWriter, r *http.Request) {
 	if err := h.service.UpdateItemQuantity(r.Context(), input); err != nil {
 		switch {
 		case errors.Is(err, cartapp.ErrUserIDIsNil):
-			response.Unauthorized(w)
-			return
+			return httpmw.NewHTTPError(http.StatusUnauthorized, op, "unauthorized")
 		case errors.Is(err, cartapp.ErrProductIDIsNil):
-			response.BadRequest(w)
-			return
+			return httpmw.NewHTTPError(http.StatusBadRequest, op, "invalid product id")
 		case errors.Is(err, cartapp.ErrQuantityInvalid):
-			response.Error(w, http.StatusUnprocessableEntity, cartapp.ErrQuantityInvalid.Error())
-			return
+			return httpmw.NewHTTPError(http.StatusUnprocessableEntity, op, cartapp.ErrQuantityInvalid.Error())
 		case errors.Is(err, cartapp.ErrCartItemNotFound):
-			response.Error(w, http.StatusNotFound, cartapp.ErrCartItemNotFound.Error())
-			return
+			return httpmw.NewHTTPError(http.StatusNotFound, op, cartapp.ErrCartItemNotFound.Error())
 		default:
-			h.log.Error("failed to update item quantity", slog.String("op", op), slog.String("err", err.Error()))
-			response.InternalError(w)
-			return
+			return fmt.Errorf("%s: failed to update item quantity: %w", op, err)
 		}
 	}
 
-	response.NoContent(w)
+	h.resp.NoContent(w)
+
+	return nil
 }
 
-func (h *Handler) DeleteItem(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) DeleteItem(w http.ResponseWriter, r *http.Request) error {
 	const op = "cart.handler.DeleteItem"
 
 	userID, ok := authcontext.UserID(r.Context())
 	if !ok {
-		response.Unauthorized(w)
-		return
+		return httpmw.NewHTTPError(http.StatusUnauthorized, op, "unauthorized")
 	}
 
 	url := chi.URLParam(r, "productID")
 	productID, err := uuid.Parse(url)
 	if err != nil {
-		response.BadRequest(w)
-		return
+		return httpmw.NewHTTPError(http.StatusBadRequest, op, "invalid product id")
 	}
 
 	if err := h.service.DeleteItem(r.Context(), userID, productID); err != nil {
 		switch {
 		case errors.Is(err, cartapp.ErrUserIDIsNil):
-			response.Unauthorized(w)
-			return
+			return httpmw.NewHTTPError(http.StatusUnauthorized, op, "unauthorized")
 		case errors.Is(err, cartapp.ErrProductIDIsNil):
-			response.BadRequest(w)
-			return
+			return httpmw.NewHTTPError(http.StatusBadRequest, op, "invalid product id")
+		default:
+			return fmt.Errorf("%s: failed to delete cart item: %w", op, err)
 		}
-
-		h.log.Error("failed to delete cart item", slog.String("op", op), slog.String("err", err.Error()))
-		response.InternalError(w)
-		return
 	}
 
-	response.NoContent(w)
+	h.resp.NoContent(w)
+	return nil
 }
 
-func (h *Handler) ClearItems(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) ClearItems(w http.ResponseWriter, r *http.Request) error {
 	const op = "cart.handler.ClearItems"
 
 	userID, ok := authcontext.UserID(r.Context())
 	if !ok {
-		response.Unauthorized(w)
-		return
+		return httpmw.NewHTTPError(http.StatusUnauthorized, op, "unauthorized")
 	}
 
 	if err := h.service.ClearItems(r.Context(), userID); err != nil {
 		if errors.Is(err, cartapp.ErrUserIDIsNil) {
-			response.Unauthorized(w)
-			return
+			return httpmw.NewHTTPError(http.StatusUnauthorized, op, "unauthorized")
 		}
-		h.log.Error("failed to clear cart items", slog.String("op", op), slog.String("err", err.Error()))
-		response.InternalError(w)
-		return
+		return fmt.Errorf("%s: failed to clear cart items: %w", op, err)
 	}
 
-	response.NoContent(w)
+	h.resp.NoContent(w)
+	return nil
 }
 
 func parsePagination(urlValues url.Values, key string) (int, bool) {
